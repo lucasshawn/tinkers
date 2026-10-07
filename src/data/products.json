@@ -1,0 +1,80 @@
+[
+  {
+    "id": "weeble-strawberry-bunny",
+    "name": "Strawberry Bunny",
+    "description": "Hand-sculpted baby bunny wearing a fresh strawberry beret. Coated in glossy, UV-cured protective glaze.",
+    "price": 14.00,
+    "images": ["https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=600&auto=format&fit=crop&q=80"],
+    "category": "animals",
+    "availableVariants": ["magnet", "keychain"],
+    "inStock": true,
+    "stockCount": 4,
+    "featured": true,
+    "isOneOfAKind": false
+  },
+  {
+    "id": "weeble-matcha-frog",
+    "name": "Matcha Boba Froggy",
+    "description": "Round chubby frog resting atop a miniature matcha boba cup with tapioca pearls. Ultra cute refrigerator companion.",
+    "price": 15.00,
+    "images": ["https://images.unsplash.com/photo-1535268647677-300dbf3d78d1?w=600&auto=format&fit=crop&q=80"],
+    "category": "animals",
+    "availableVariants": ["magnet", "keychain"],
+    "inStock": true,
+    "stockCount": 2,
+    "featured": true,
+    "isOneOfAKind": true
+  },
+  {
+    "id": "weeble-donut-bear",
+    "name": "Pink Glazed Donut Bear",
+    "description": "Pastel brown cub hugging a strawberry-sprinkled donut. Durable clasp on keychain or strong neodymium magnet.",
+    "price": 14.50,
+    "images": ["https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80"],
+    "category": "sweets",
+    "availableVariants": ["magnet", "keychain"],
+    "inStock": true,
+    "stockCount": 3,
+    "featured": false,
+    "isOneOfAKind": false
+  },
+  {
+    "id": "weeble-sleepy-cloud-cat",
+    "name": "Sleepy Cloud Kitty",
+    "description": "Drowsy calico kitten curled up asleep on a puffy pastel cloud with gold star sparkles.",
+    "price": 16.00,
+    "images": ["https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600&auto=format&fit=crop&q=80"],
+    "category": "fantasy",
+    "availableVariants": ["magnet", "keychain"],
+    "inStock": true,
+    "stockCount": 1,
+    "featured": true,
+    "isOneOfAKind": true
+  },
+  {
+    "id": "weeble-peach-chick",
+    "name": "Peach Blossom Chick",
+    "description": "Tiny cheerful chick holding a miniature ripe peach with blushing pink cheeks.",
+    "price": 12.00,
+    "images": ["https://images.unsplash.com/photo-1557008075-7f2c5efa4cfd?w=600&auto=format&fit=crop&q=80"],
+    "category": "mini-friends",
+    "availableVariants": ["magnet", "keychain"],
+    "inStock": true,
+    "stockCount": 6,
+    "featured": false,
+    "isOneOfAKind": false
+  },
+  {
+    "id": "weeble-lavender-ghost",
+    "name": "Sweet Lavender Spook",
+    "description": "Gentle friendly pastel ghost holding a blooming lavender flower. Glows softly in the dark under UV light.",
+    "price": 13.50,
+    "images": ["https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600&auto=format&fit=crop&q=80"],
+    "category": "fantasy",
+    "availableVariants": ["magnet", "keychain"],
+    "inStock": false,
+    "stockCount": 0,
+    "featured": false,
+    "isOneOfAKind": true
+  }
+]
