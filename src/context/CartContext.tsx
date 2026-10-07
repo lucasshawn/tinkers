@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { CartItem, Product, VariantType } from '../types';
 
 export interface CartContextType {
@@ -35,7 +35,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [items]);
 
-  const addToCart = (product: Product, variant: VariantType) => {
+  const addToCart = useCallback((product: Product, variant: VariantType) => {
     const compositeId = `${product.id}-${variant}`;
     setItems((prev) => {
       const existing = prev.find((item) => item.id === compositeId);
@@ -58,13 +58,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return [...prev, newItem];
     });
     setIsCartOpen(true);
-  };
+  }, []);
 
-  const removeFromCart = (cartItemId: string) => {
+  const removeFromCart = useCallback((cartItemId: string) => {
     setItems((prev) => prev.filter((item) => item.id !== cartItemId));
-  };
+  }, []);
 
-  const updateQuantity = (cartItemId: string, quantity: number) => {
+  const updateQuantity = useCallback((cartItemId: string, quantity: number) => {
     if (quantity <= 0) {
       removeFromCart(cartItemId);
       return;
@@ -74,11 +74,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         item.id === cartItemId ? { ...item, quantity } : item
       )
     );
-  };
+  }, [removeFromCart]);
 
-  const clearCart = () => {
-    setItems([]);
-  };
+  const clearCart = useCallback(() => {
+    setItems((prev) => (prev.length === 0 ? prev : []));
+  }, []);
 
   const totalCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);

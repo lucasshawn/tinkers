@@ -12,5 +12,13 @@
   <body class="bg-weeble-pinkBg text-weeble-text font-body antialiased selection:bg-weeble-pink selection:text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Hidden form for Netlify bots to discover form fields during build -->
+    <form name="custom-requests" netlify netlify-honeypot="bot-field" hidden>
+      <input type="text" name="name" />
+      <input type="email" name="email" />
+      <input type="text" name="finish" />
+      <textarea name="description"></textarea>
+      <input type="file" name="reference_photo" />
+    </form>
   </body>
 </html>

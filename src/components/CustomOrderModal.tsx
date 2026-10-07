@@ -19,11 +19,10 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
     const formData = new FormData(e.currentTarget);
 
     try {
-      // Netlify Form submission via standard POST
+      // Netlify Form submission via standard POST with multipart/form-data support
       await fetch('/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams(formData as any).toString(),
+        body: formData,
       });
     } catch {
       // Fallback grace for offline/dev preview
@@ -89,6 +88,7 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
               name="custom-requests"
               method="POST"
               data-netlify="true"
+              encType="multipart/form-data"
               onSubmit={handleSubmit}
               className="space-y-4"
             >

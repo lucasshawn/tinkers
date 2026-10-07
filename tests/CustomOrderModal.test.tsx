@@ -103,7 +103,7 @@ describe('CustomOrderModal', () => {
       '/',
       expect.objectContaining({
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: expect.any(FormData),
       })
     );
 
