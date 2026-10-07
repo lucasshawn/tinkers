@@ -1,0 +1,30 @@
+backend:
+  name: git-gateway
+  branch: main
+
+media_folder: "public/images/products"
+public_folder: "/images/products"
+
+collections:
+  - name: "catalog"
+    label: "Figurine Catalog"
+    files:
+      - label: "Weeble Products"
+        name: "products"
+        file: "src/data/products.json"
+        fields:
+          - label: "Products"
+            name: "products"
+            widget: "list"
+            fields:
+              - { label: "ID", name: "id", widget: "string" }
+              - { label: "Name", name: "name", widget: "string" }
+              - { label: "Description", name: "description", widget: "text" }
+              - { label: "Price ($)", name: "price", widget: "number", value_type: "float" }
+              - { label: "Images", name: "images", widget: "list" }
+              - { label: "Category", name: "category", widget: "select", options: ["animals", "sweets", "fantasy", "mini-friends"] }
+              - { label: "Variants", name: "availableVariants", widget: "select", multiple: true, options: ["magnet", "keychain"] }
+              - { label: "In Stock", name: "inStock", widget: "boolean", default: true }
+              - { label: "Stock Count", name: "stockCount", widget: "number", default: 1 }
+              - { label: "Featured", name: "featured", widget: "boolean", default: false }
+              - { label: "1-of-1 Original", name: "isOneOfAKind", widget: "boolean", default: false }
