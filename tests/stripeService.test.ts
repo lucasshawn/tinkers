@@ -19,8 +19,8 @@ vi.mock('stripe', () => {
 
 const mockCart: CartItem[] = [
   {
-    id: 'prod-1-magnet',
-    productId: 'prod-1',
+    id: 'weeble-strawberry-bunny-magnet',
+    productId: 'weeble-strawberry-bunny',
     name: 'Strawberry Bunny',
     variant: 'magnet',
     price: 14.0,
@@ -28,9 +28,9 @@ const mockCart: CartItem[] = [
     quantity: 2,
   },
   {
-    id: 'prod-2-keychain',
-    productId: 'prod-2',
-    name: 'Matcha Bear',
+    id: 'weeble-matcha-frog-keychain',
+    productId: 'weeble-matcha-frog',
+    name: 'Matcha Boba Froggy',
     variant: 'keychain',
     price: 15.0,
     image: '',
@@ -202,13 +202,113 @@ describe('create-checkout Netlify Function handler', () => {
     expect(lineItems[0].price_data.unit_amount).toBe(1400);
     expect(lineItems[0].quantity).toBe(2);
 
-    expect(lineItems[1].price_data.product_data.name).toContain('Matcha Bear');
+    expect(lineItems[1].price_data.product_data.name).toContain('Matcha Boba Froggy');
     expect(lineItems[1].price_data.product_data.name).toContain('🔑 Keychain');
     expect(lineItems[1].price_data.unit_amount).toBe(1500);
     expect(lineItems[1].quantity).toBe(1);
 
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.body).url).toBe('https://checkout.stripe.com/pay/cs_test_mock');
+  });
+
+  it('returns 400 when an item productId is not found in catalog', async () => {
+    const response = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: {},
+        body: JSON.stringify({
+          items: [{ productId: 'non-existent-item', quantity: 1, variant: 'magnet' }],
+        }),
+      } as any,
+      {} as any,
+      () => {}
+    )) as any;
+
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body).error).toBe('Product unavailable or sold out');
+  });
+
+  it('returns 400 when an item is out of stock in catalog', async () => {
+    const response = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: {},
+        body: JSON.stringify({
+          items: [{ productId: 'weeble-lavender-ghost', quantity: 1, variant: 'magnet' }],
+        }),
+      } as any,
+      {} as any,
+      () => {}
+    )) as any;
+
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body).error).toBe('Product unavailable or sold out');
+  });
+
+  it('ignores manipulated client price and uses authoritative catalog price', async () => {
+    process.env.STRIPE_SECRET_KEY = 'sk_test_fake_key_123';
+    mockCreateSession.mockResolvedValue({
+      url: 'https://checkout.stripe.com/pay/cs_test_mock',
+    });
+
+    const manipulatedCart = [
+      {
+        id: 'weeble-strawberry-bunny-magnet',
+        productId: 'weeble-strawberry-bunny',
+        name: 'Strawberry Bunny',
+        variant: 'magnet',
+        price: 0.01, // manipulated client price
+        quantity: 1,
+      },
+    ];
+
+    const response = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { origin: 'https://weebles.store' },
+        body: JSON.stringify({ items: manipulatedCart }),
+      } as any,
+      {} as any,
+      () => {}
+    )) as any;
+
+    expect(response.statusCode).toBe(200);
+    const lineItems = mockCreateSession.mock.calls[0][0].line_items;
+    expect(lineItems[0].price_data.unit_amount).toBe(1400); // Uses catalog price $14.00, not $0.01
+  });
+
+  it('correctly constructs origin with protocol when event.headers.origin is missing', async () => {
+    delete process.env.STRIPE_SECRET_KEY;
+
+    const responseLocal = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { host: 'localhost:8888' },
+        body: JSON.stringify({ items: mockCart }),
+      } as any,
+      {} as any,
+      () => {}
+    )) as any;
+
+    expect(responseLocal.statusCode).toBe(200);
+    expect(JSON.parse(responseLocal.body).url).toBe(
+      'http://localhost:8888/order-success?demo_mode=true'
+    );
+
+    const responseForwarded = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { host: 'custom.domain.com', 'x-forwarded-proto': 'https' },
+        body: JSON.stringify({ items: mockCart }),
+      } as any,
+      {} as any,
+      () => {}
+    )) as any;
+
+    expect(responseForwarded.statusCode).toBe(200);
+    expect(JSON.parse(responseForwarded.body).url).toBe(
+      'https://custom.domain.com/order-success?demo_mode=true'
+    );
   });
 
   it('returns 500 when Stripe API throws an error', async () => {

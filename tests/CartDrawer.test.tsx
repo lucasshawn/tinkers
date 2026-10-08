@@ -29,6 +29,19 @@ const testProduct2: Product = {
   stockCount: 3,
 };
 
+const testOneOfAKind: Product = {
+  id: 'cart-prod-3',
+  name: 'Unique Fairy',
+  description: '1-of-1 fairy',
+  price: 25.0,
+  images: ['/img3.jpg'],
+  category: 'fantasy',
+  availableVariants: ['magnet'],
+  inStock: true,
+  stockCount: 1,
+  isOneOfAKind: true,
+};
+
 interface TestHelperProps {
   onCheckout?: (giftNote: string) => void;
   isLoadingCheckout?: boolean;
@@ -57,6 +70,14 @@ const CartTestHelper: React.FC<TestHelperProps> = ({
         }}
       >
         Add Keychain Item
+      </button>
+      <button
+        onClick={() => {
+          addToCart(testOneOfAKind, 'magnet');
+          setIsCartOpen(true);
+        }}
+      >
+        Add 1-of-1 Item
       </button>
       <button onClick={() => setIsCartOpen(true)}>Open Cart</button>
       <button onClick={() => setIsCartOpen(false)}>Close Cart</button>
@@ -248,5 +269,46 @@ describe('CartDrawer', () => {
 
     fireEvent.click(checkoutBtn);
     expect(handleCheckout).not.toHaveBeenCalled();
+  });
+
+  it('closes cart when Escape key is pressed', () => {
+    render(
+      <CartProvider>
+        <CartTestHelper />
+      </CartProvider>
+    );
+
+    fireEvent.click(screen.getByText('Open Cart'));
+    expect(screen.getByText('Your Weeble Cart')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByText('Your Weeble Cart')).not.toBeInTheDocument();
+  });
+
+  it('renders drawer with dialog role and aria-label', () => {
+    render(
+      <CartProvider>
+        <CartTestHelper />
+      </CartProvider>
+    );
+
+    fireEvent.click(screen.getByText('Open Cart'));
+    const dialog = screen.getByRole('dialog', { name: /Shopping Cart Drawer/i });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('disables plus button when item quantity reaches max allowed for 1-of-1 item', () => {
+    render(
+      <CartProvider>
+        <CartTestHelper />
+      </CartProvider>
+    );
+
+    fireEvent.click(screen.getByText('Add 1-of-1 Item'));
+    expect(screen.getByText('Unique Fairy')).toBeInTheDocument();
+
+    const plusBtn = screen.getByRole('button', { name: /Increase quantity of Unique Fairy/i });
+    expect(plusBtn).toBeDisabled();
   });
 });

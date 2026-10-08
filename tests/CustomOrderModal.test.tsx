@@ -43,6 +43,26 @@ describe('CustomOrderModal', () => {
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 
+  it('calls onClose when Escape key is pressed', () => {
+    const handleClose = vi.fn();
+    render(<CustomOrderModal isOpen={true} onClose={handleClose} />);
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(handleClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders dialog with proper accessibility attributes and fieldset', () => {
+    render(<CustomOrderModal isOpen={true} onClose={vi.fn()} />);
+
+    const dialog = screen.getByRole('dialog', { name: /Dream Up Your Custom Weeble/i });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'custom-modal-title');
+
+    const fieldset = screen.getByRole('group', { name: /Preferred Finish/i });
+    expect(fieldset).toBeInTheDocument();
+  });
+
   it('renders finish radio options with magnet selected by default and allows selecting keychain', () => {
     render(<CustomOrderModal isOpen={true} onClose={vi.fn()} />);
 

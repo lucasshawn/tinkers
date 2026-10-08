@@ -37,12 +37,18 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addToCart = useCallback((product: Product, variant: VariantType) => {
     const compositeId = `${product.id}-${variant}`;
+    const maxQuantity = product.isOneOfAKind ? 1 : (product.stockCount || 10);
+
     setItems((prev) => {
       const existing = prev.find((item) => item.id === compositeId);
       if (existing) {
+        const itemMax = existing.maxQuantity ?? maxQuantity;
+        if (existing.quantity >= itemMax) {
+          return prev;
+        }
         return prev.map((item) =>
           item.id === compositeId
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: Math.min(item.quantity + 1, itemMax) }
             : item
         );
       }
@@ -54,6 +60,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         price: product.price,
         image: product.images[0] || '',
         quantity: 1,
+        maxQuantity,
       };
       return [...prev, newItem];
     });
@@ -70,9 +77,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     setItems((prev) =>
-      prev.map((item) =>
-        item.id === cartItemId ? { ...item, quantity } : item
-      )
+      prev.map((item) => {
+        if (item.id !== cartItemId) return item;
+        const maxAllowed = item.maxQuantity ?? 10;
+        return {
+          ...item,
+          quantity: Math.min(quantity, maxAllowed),
+        };
+      })
     );
   }, [removeFromCart]);
 

@@ -9,14 +9,20 @@ interface ProductCardProps {
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
-  const { addToCart } = useCart();
+  const { addToCart, items } = useCart();
   const [selectedVariant, setSelectedVariant] = useState<VariantType>(
     product.availableVariants[0] || 'magnet'
   );
   const [justAdded, setJustAdded] = useState(false);
 
+  const currentItem = items.find(
+    (item) => item.id === `${product.id}-${selectedVariant}`
+  );
+  const maxAllowed = product.isOneOfAKind ? 1 : (product.stockCount || 10);
+  const isMaxReached = currentItem ? currentItem.quantity >= maxAllowed : false;
+
   const handleAddToCart = () => {
-    if (!product.inStock) return;
+    if (!product.inStock || isMaxReached) return;
     addToCart(product, selectedVariant);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1200);
@@ -103,9 +109,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         {/* Action Button */}
         <button
           onClick={handleAddToCart}
-          disabled={!product.inStock}
+          disabled={!product.inStock || isMaxReached}
           className={`w-full py-2.5 px-4 rounded-full font-bubble text-sm font-bold transition-all duration-200 flex items-center justify-center gap-1.5 ${
-            !product.inStock
+            !product.inStock || isMaxReached
               ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
               : justAdded
               ? 'bg-emerald-500 text-white scale-95'
@@ -118,6 +124,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </>
           ) : !product.inStock ? (
             '💤 Sold Out'
+          ) : isMaxReached ? (
+            product.isOneOfAKind ? '⭐ 1-of-1 in Cart' : 'Max in Cart'
           ) : (
             <>
               <span>Adopt Me</span>

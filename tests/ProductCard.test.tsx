@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ProductCard } from '../src/components/ProductCard';
 import { CatalogGrid } from '../src/components/CatalogGrid';
@@ -45,6 +45,10 @@ const mockProducts: Product[] = [
 ];
 
 describe('ProductCard', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it('renders product details and variant options', () => {
     render(
       <CartProvider>
@@ -130,6 +134,34 @@ describe('ProductCard', () => {
     expect(screen.getAllByText(/Sold Out/i).length).toBeGreaterThan(0);
     const btn = screen.getByRole('button', { name: /Sold Out/i });
     expect(btn).toBeDisabled();
+  });
+
+  it('disables add to cart and displays 1-of-1 in cart when already added', () => {
+    vi.useFakeTimers();
+    const oneOfAKindProduct: Product = {
+      ...mockProduct,
+      isOneOfAKind: true,
+      stockCount: 1,
+    };
+
+    render(
+      <CartProvider>
+        <ProductCard product={oneOfAKindProduct} />
+      </CartProvider>
+    );
+
+    const adoptBtn = screen.getByRole('button', { name: /adopt me/i });
+    fireEvent.click(adoptBtn);
+
+    expect(screen.getByText(/Added to Cart!/i)).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(1300);
+    });
+
+    const disabledBtn = screen.getByRole('button', { name: /1-of-1 in Cart/i });
+    expect(disabledBtn).toBeDisabled();
+    vi.useRealTimers();
   });
 });
 

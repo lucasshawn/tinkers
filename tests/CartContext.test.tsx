@@ -151,4 +151,44 @@ describe('CartContext', () => {
     }).toThrow('useCart must be used within a CartProvider');
     consoleSpy.mockRestore();
   });
+
+  it('prevents 1-of-1 original products from exceeding quantity 1 when added multiple times', () => {
+    const oneOfAKindProduct: Product = {
+      ...testProduct,
+      id: 'one-of-a-kind-1',
+      isOneOfAKind: true,
+      stockCount: 1,
+    };
+    const { result } = renderHook(() => useCart(), { wrapper });
+
+    act(() => {
+      result.current.addToCart(oneOfAKindProduct, 'magnet');
+    });
+    expect(result.current.items[0].quantity).toBe(1);
+
+    act(() => {
+      result.current.addToCart(oneOfAKindProduct, 'magnet');
+    });
+    expect(result.current.items[0].quantity).toBe(1);
+    expect(result.current.totalCount).toBe(1);
+  });
+
+  it('clamps quantity to maxQuantity in updateQuantity for 1-of-1 products', () => {
+    const oneOfAKindProduct: Product = {
+      ...testProduct,
+      id: 'one-of-a-kind-2',
+      isOneOfAKind: true,
+      stockCount: 1,
+    };
+    const { result } = renderHook(() => useCart(), { wrapper });
+
+    act(() => {
+      result.current.addToCart(oneOfAKindProduct, 'magnet');
+    });
+
+    act(() => {
+      result.current.updateQuantity('one-of-a-kind-2-magnet', 5);
+    });
+    expect(result.current.items[0].quantity).toBe(1);
+  });
 });

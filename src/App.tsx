@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CartProvider } from './context/CartContext';
+import { CartProvider, useCart } from './context/CartContext';
 import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
 import { CatalogGrid } from './components/CatalogGrid';
@@ -13,8 +13,13 @@ import productsData from './data/products.json';
 import { Product } from './types';
 
 export const AppContent: React.FC = () => {
+  const { items } = useCart();
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
+
+  // Defensively normalize productsData
+  const rawProducts = (productsData as any)?.products || productsData;
+  const products: Product[] = Array.isArray(rawProducts) ? rawProducts : [];
 
   // Check if viewing order success
   const isSuccessPage =
@@ -29,8 +34,6 @@ export const AppContent: React.FC = () => {
   const handleCheckout = async (giftNote: string) => {
     setIsLoadingCheckout(true);
     try {
-      const stored = localStorage.getItem('weebles_cart_v1');
-      const items = stored ? JSON.parse(stored) : [];
       const session = await createCheckoutSession(items, giftNote);
       window.location.href = session.url;
     } catch (err: any) {
@@ -58,7 +61,7 @@ export const AppContent: React.FC = () => {
         <SocialStrip />
 
         <CatalogGrid
-          products={productsData as Product[]}
+          products={products}
           onOpenCustomModal={() => setIsCustomModalOpen(true)}
         />
       </main>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Send, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export interface CustomOrderModalProps {
@@ -9,6 +9,17 @@ export interface CustomOrderModalProps {
 export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onClose }) => {
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -42,7 +53,12 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
       />
 
       {/* Modal Dialog */}
-      <div className="relative bg-white rounded-3xl border-4 border-pink-200 max-w-lg w-full p-6 sm:p-8 shadow-2xl z-10">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="custom-modal-title"
+        className="relative bg-white rounded-3xl border-4 border-pink-200 max-w-lg w-full p-6 sm:p-8 shadow-2xl z-10"
+      >
         <button
           onClick={onClose}
           aria-label="Close modal"
@@ -76,7 +92,10 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
               <span className="bg-pink-100 text-pink-700 text-xs font-bold px-3 py-1 rounded-full inline-flex items-center gap-1 mb-2">
                 <Sparkles className="w-3 h-3" /> Bespoke Clay Art
               </span>
-              <h2 className="font-bubble text-2xl sm:text-3xl font-bold text-weeble-text">
+              <h2
+                id="custom-modal-title"
+                className="font-bubble text-2xl sm:text-3xl font-bold text-weeble-text"
+              >
                 Dream Up Your Custom Weeble 💌
               </h2>
               <p className="text-xs text-weeble-textMuted mt-1">
@@ -122,10 +141,10 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-weeble-text mb-1">
+              <fieldset>
+                <legend className="text-xs font-bold text-weeble-text mb-1">
                   Preferred Finish
-                </label>
+                </legend>
                 <div className="grid grid-cols-3 gap-2">
                   <label className="text-xs font-bold p-2 border border-pink-200 rounded-xl text-center cursor-pointer bg-white hover:bg-weeble-pinkWash flex items-center justify-center gap-1">
                     <input type="radio" name="finish" value="magnet" defaultChecked className="accent-pink-500" />
@@ -140,7 +159,7 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
                     <span>🧸 Figurine</span>
                   </label>
                 </div>
-              </div>
+              </fieldset>
 
               <div>
                 <label htmlFor="description" className="block text-xs font-bold text-weeble-text mb-1">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Trash2, Plus, Minus, Lock } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { formatPrice } from '../utils/productUtils';
@@ -13,6 +13,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onCheckout, isLoadingChe
     useCart();
   const [giftNote, setGiftNote] = useState('');
 
+  useEffect(() => {
+    if (!isCartOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsCartOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCartOpen, setIsCartOpen]);
+
   if (!isCartOpen) return null;
 
   return (
@@ -26,7 +37,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onCheckout, isLoadingChe
 
       {/* Drawer */}
       <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-white border-l-4 border-pink-200 shadow-2xl flex flex-col">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Shopping Cart Drawer"
+          className="w-screen max-w-md bg-white border-l-4 border-pink-200 shadow-2xl flex flex-col"
+        >
           {/* Header */}
           <div className="p-5 border-b border-pink-100 flex items-center justify-between bg-weeble-pinkBg">
             <div className="flex items-center gap-2">
@@ -104,8 +120,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onCheckout, isLoadingChe
                     </span>
                     <button
                       onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                      disabled={item.quantity >= (item.maxQuantity ?? 10)}
                       aria-label={`Increase quantity of ${item.name}`}
-                      className="text-weeble-textMuted hover:text-weeble-pink p-0.5 cursor-pointer"
+                      className="text-weeble-textMuted hover:text-weeble-pink p-0.5 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-weeble-textMuted"
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>

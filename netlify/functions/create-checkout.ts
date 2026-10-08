@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions';
 import Stripe from 'stripe';
+import productsData from '../../src/data/products.json';
 
 export const getStripe = (): Stripe | null => {
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
@@ -26,7 +27,27 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    const origin = event.headers.origin || event.headers.host || 'http://localhost:8888';
+    // Authoritative catalog validation
+    const rawProducts = (productsData as any)?.products || productsData;
+    const catalog: any[] = Array.isArray(rawProducts) ? rawProducts : [];
+
+    for (const item of items) {
+      const product = catalog.find((p: any) => p.id === item.productId);
+      if (!product || !product.inStock) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ error: 'Product unavailable or sold out' }),
+        };
+      }
+    }
+
+    let origin = event.headers.origin;
+    if (!origin) {
+      const host = event.headers.host || 'localhost:8888';
+      const proto = event.headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https');
+      origin = `${proto}://${host}`;
+    }
+
     const stripe = getStripe();
 
     if (!stripe) {
@@ -39,21 +60,24 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    const line_items = items.map((item: any) => ({
-      price_data: {
-        currency: 'usd',
-        product_data: {
-          name: `${item.name} (${item.variant === 'magnet' ? '🧲 Refrigerator Magnet' : '🔑 Keychain'})`,
-          images: item.image ? [item.image] : [],
-          metadata: {
-            variant: item.variant,
-            productId: item.productId,
+    const line_items = items.map((item: any) => {
+      const product = catalog.find((p: any) => p.id === item.productId)!;
+      return {
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `${product.name} (${item.variant === 'magnet' ? '🧲 Refrigerator Magnet' : '🔑 Keychain'})`,
+            images: item.image ? [item.image] : (product.images?.[0] ? [product.images[0]] : []),
+            metadata: {
+              variant: item.variant,
+              productId: item.productId,
+            },
           },
+          unit_amount: Math.round(product.price * 100),
         },
-        unit_amount: Math.round(item.price * 100),
-      },
-      quantity: item.quantity,
-    }));
+        quantity: item.quantity,
+      };
+    });
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],

@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 import App from '../src/App';
 import { OrderSuccess } from '../src/components/OrderSuccess';
@@ -94,5 +94,47 @@ describe('App smoke test', () => {
     expect(screen.getByText(/Adoption Confirmed!/i)).toBeInTheDocument();
     expect(screen.getByText(/What happens next\?/i)).toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem('weebles_cart_v1') || '[]')).toEqual([]);
+  });
+
+  it('triggers checkout in App sending items from CartContext', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ url: 'https://checkout.stripe.com/pay/test' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+
+    localStorage.setItem(
+      'weebles_cart_v1',
+      JSON.stringify([
+        {
+          id: 'weeble-strawberry-bunny-magnet',
+          productId: 'weeble-strawberry-bunny',
+          name: 'Strawberry Bunny',
+          variant: 'magnet',
+          price: 14.0,
+          image: '/img.jpg',
+          quantity: 1,
+        },
+      ])
+    );
+
+    render(React.createElement(App));
+
+    const cartBtn = screen.getByRole('button', { name: 'cart' });
+    fireEvent.click(cartBtn);
+
+    const checkoutBtn = screen.getByRole('button', { name: /Checkout with Stripe/i });
+    await act(async () => {
+      fireEvent.click(checkoutBtn);
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/.netlify/functions/create-checkout',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('weeble-strawberry-bunny'),
+      })
+    );
   });
 });
