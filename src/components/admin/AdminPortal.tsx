@@ -8,6 +8,7 @@ import { SettingsTab } from './SettingsTab';
 import { useSettings } from '../../context/SettingsContext';
 import initialProductsData from '../../data/products.json';
 import { Product } from '../../types';
+import { SiteSettings } from '../../types/settings';
 
 export const AdminPortal: React.FC = () => {
   const [session, setSession] = useState<AdminSession | null>(() => adminAuth.getSession());
@@ -18,6 +19,7 @@ export const AdminPortal: React.FC = () => {
   });
   const { settings, updateSettings } = useSettings();
   const [notification, setNotification] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!session) {
     return <AdminLoginCard onLoginSuccess={(s) => setSession(s)} />;
@@ -32,17 +34,29 @@ export const AdminPortal: React.FC = () => {
     updated: Product[],
     newImage?: { filename: string; base64Data: string }
   ) => {
-    const res = await adminApi.saveInventory(updated, newImage);
-    setProducts(updated);
-    setNotification(res.message);
-    setTimeout(() => setNotification(null), 4000);
+    setErrorMessage(null);
+    try {
+      const res = await adminApi.saveInventory(updated, newImage);
+      setProducts(updated);
+      setNotification(res.message);
+      setTimeout(() => setNotification(null), 4000);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to save inventory');
+      setTimeout(() => setErrorMessage(null), 5000);
+    }
   };
 
-  const handleSaveSettings = async (newSettings: any) => {
-    const res = await adminApi.saveSettings(newSettings);
-    updateSettings(newSettings);
-    setNotification(res.message);
-    setTimeout(() => setNotification(null), 4000);
+  const handleSaveSettings = async (newSettings: SiteSettings) => {
+    setErrorMessage(null);
+    try {
+      const res = await adminApi.saveSettings(newSettings);
+      updateSettings(newSettings);
+      setNotification(res.message);
+      setTimeout(() => setNotification(null), 4000);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to save settings');
+      setTimeout(() => setErrorMessage(null), 5000);
+    }
   };
 
   return (
@@ -88,6 +102,12 @@ export const AdminPortal: React.FC = () => {
         {notification && (
           <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-4 py-3 rounded-2xl shadow-xs">
             {notification}
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold px-4 py-3 rounded-2xl shadow-xs">
+            {errorMessage}
           </div>
         )}
 

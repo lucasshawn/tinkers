@@ -33,7 +33,7 @@ export const AppContent: React.FC = () => {
     return <OrderSuccess />;
   }
 
-  if (window.location.pathname === '/admin') {
+  if (['/admin', '/admin/'].includes(window.location.pathname)) {
     return <AdminPortal />;
   }
 
