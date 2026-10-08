@@ -63,10 +63,11 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const cleanFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, '');
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result as string;
-      setUploadedImage({ filename: file.name, base64Data: base64 });
+      setUploadedImage({ filename: cleanFilename, base64Data: base64 });
       setImageUrl(base64);
     };
     reader.readAsDataURL(file);

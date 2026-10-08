@@ -1,4 +1,5 @@
 import { Handler } from '@netlify/functions';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { ALLOWED_ADMINS } from './admin-auth';
@@ -7,15 +8,14 @@ function verifyToken(authHeader?: string): string | null {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
   const token = authHeader.replace('Bearer ', '').trim();
   try {
-    const decoded = Buffer.from(token, 'base64').toString('utf-8');
-    const parts = decoded.split(':');
-    if (parts.length < 3) return null;
-    const email = parts[0];
-    const exp = parts[1];
-    const secret = parts.slice(2).join(':');
-
+    const [payloadBase64, signature] = token.split('.');
+    if (!payloadBase64 || !signature) return null;
     const sessionSecret = process.env.ADMIN_SESSION_SECRET || 'weebles-studio-dev-secret-2026';
-    if (secret !== sessionSecret) return null;
+    const expectedSig = crypto.createHmac('sha256', sessionSecret).update(payloadBase64).digest('hex');
+    if (signature !== expectedSig) return null;
+    const decoded = Buffer.from(payloadBase64, 'base64').toString('utf-8');
+    const [email, exp] = decoded.split(':');
+    if (!email || !exp || isNaN(Number(exp))) return null;
     if (Number(exp) < Date.now()) return null;
     if (!ALLOWED_ADMINS.includes(email.toLowerCase())) return null;
     return email.toLowerCase();

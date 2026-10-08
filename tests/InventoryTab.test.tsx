@@ -226,6 +226,46 @@ describe('InventoryTab', () => {
     window.FileReader = originalFileReader;
   });
 
+  it('sanitizes uploaded image filename to remove special characters and spaces', async () => {
+    const handleSave = vi.fn().mockResolvedValue(undefined);
+    render(<InventoryTab products={mockProducts} onSave={handleSave} />);
+
+    const addBtn = screen.getByRole('button', { name: /\+ Add New Weeble/i });
+    fireEvent.click(addBtn);
+
+    const fileInput = screen.getByLabelText(/Product Photo/i) as HTMLInputElement;
+    const file = new File(['dummy-content'], 'sweet strawberry #1 (special).png', { type: 'image/png' });
+
+    const mockResult = 'data:image/png;base64,ZHVtbXk=';
+    const originalFileReader = window.FileReader;
+    class MockFileReader {
+      onload: (() => void) | null = null;
+      result: string | ArrayBuffer | null = null;
+      readAsDataURL() {
+        this.result = mockResult;
+        if (this.onload) this.onload();
+      }
+    }
+    // @ts-expect-error Mocking FileReader
+    window.FileReader = MockFileReader;
+
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    fireEvent.change(screen.getByLabelText(/Name/i), { target: { value: 'Sweet Berry' } });
+    fireEvent.change(screen.getByLabelText(/Description/i), { target: { value: 'Berry treat' } });
+    fireEvent.click(screen.getByRole('button', { name: /Save Weeble/i }));
+
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledTimes(1);
+    });
+
+    const [savedProducts, newImage] = handleSave.mock.calls[0];
+    expect(newImage.filename).toBe('sweetstrawberry1special.png');
+    expect(savedProducts[0].images[0]).toBe('/images/products/sweetstrawberry1special.png');
+
+    window.FileReader = originalFileReader;
+  });
+
   it('handles category selection and stock toggles', async () => {
     const handleSave = vi.fn().mockResolvedValue(undefined);
     render(<InventoryTab products={mockProducts} onSave={handleSave} />);

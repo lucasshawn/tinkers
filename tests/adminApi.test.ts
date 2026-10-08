@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import { handler } from '../netlify/functions/admin-save';
+import { createSessionToken } from '../netlify/functions/admin-auth';
 import { adminApi } from '../src/services/adminApi';
 import { adminAuth } from '../src/services/adminAuth';
 import { Product } from '../src/types';
@@ -22,8 +23,8 @@ describe('admin-save Netlify Function', () => {
     process.env = originalEnv;
   });
 
-  const validToken = Buffer.from('lucasshawn@gmail.com:9999999999999:weebles-studio-dev-secret-2026').toString('base64');
-  const validCierraToken = Buffer.from('lucascierra24@gmail.com:9999999999999:weebles-studio-dev-secret-2026').toString('base64');
+  const validToken = createSessionToken('lucasshawn@gmail.com', 9999999999999);
+  const validCierraToken = createSessionToken('lucascierra24@gmail.com', 9999999999999);
 
   it('rejects non-POST HTTP methods with 405', async () => {
     const event = {
@@ -61,7 +62,7 @@ describe('admin-save Netlify Function', () => {
   });
 
   it('rejects invalid or non-whitelisted session tokens with 403', async () => {
-    const badToken = Buffer.from('hacker@gmail.com:9999999999999:weebles-studio-dev-secret-2026').toString('base64');
+    const badToken = createSessionToken('hacker@gmail.com', 9999999999999);
     const event = {
       httpMethod: 'POST',
       headers: { authorization: `Bearer ${badToken}` },
@@ -74,7 +75,7 @@ describe('admin-save Netlify Function', () => {
   });
 
   it('rejects expired session tokens with 403', async () => {
-    const expiredToken = Buffer.from('lucasshawn@gmail.com:1000:weebles-studio-dev-secret-2026').toString('base64');
+    const expiredToken = createSessionToken('lucasshawn@gmail.com', 1000);
     const event = {
       httpMethod: 'POST',
       headers: { authorization: `Bearer ${expiredToken}` },
@@ -86,8 +87,8 @@ describe('admin-save Netlify Function', () => {
     expect(JSON.parse(res.body).error).toMatch(/unauthorized admin session/i);
   });
 
-  it('rejects token with wrong secret with 403', async () => {
-    const wrongSecretToken = Buffer.from('lucasshawn@gmail.com:9999999999999:wrong-secret').toString('base64');
+  it('rejects token with wrong secret or tampered signature with 403', async () => {
+    const wrongSecretToken = createSessionToken('lucasshawn@gmail.com', 9999999999999, 'wrong-secret');
     const event = {
       httpMethod: 'POST',
       headers: { authorization: `Bearer ${wrongSecretToken}` },
@@ -96,6 +97,22 @@ describe('admin-save Netlify Function', () => {
 
     const res = await handler(event as any, {} as any) as any;
     expect(res.statusCode).toBe(403);
+
+    // Tampered signature
+    const tamperedRes = await handler({
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}tampered` },
+      body: JSON.stringify({ type: 'settings', settings: {} }),
+    } as any, {} as any) as any;
+    expect(tamperedRes.statusCode).toBe(403);
+
+    // Malformed token without dot
+    const malformedRes = await handler({
+      httpMethod: 'POST',
+      headers: { authorization: 'Bearer malformedtokennodot' },
+      body: JSON.stringify({ type: 'settings', settings: {} }),
+    } as any, {} as any) as any;
+    expect(malformedRes.statusCode).toBe(403);
   });
 
   it('accepts authenticated request from whitelisted admin in dev mode (settings)', async () => {

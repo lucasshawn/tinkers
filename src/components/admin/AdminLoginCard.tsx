@@ -86,27 +86,29 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({ onLoginSuccess }
         <div className="flex justify-center mb-6" id="googleSignInBtn" />
 
         {/* Development Studio Login Buttons */}
-        <div className="bg-weeble-pinkWash p-4 rounded-2xl border border-pink-100 mb-6">
-          <span className="text-[11px] font-bold text-weeble-textMuted uppercase tracking-wider block mb-2">
-            Authorized Studio Access:
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              disabled={isLoading}
-              onClick={() => handleDevLogin('lucasshawn@gmail.com')}
-              className="bg-white hover:bg-pink-50 text-weeble-text border border-pink-200 text-xs font-bold py-2 px-3 rounded-xl transition-all shadow-xs hover:border-pink-300"
-            >
-              Login as Shawn 🍓
-            </button>
-            <button
-              disabled={isLoading}
-              onClick={() => handleDevLogin('lucascierra24@gmail.com')}
-              className="bg-white hover:bg-pink-50 text-weeble-text border border-pink-200 text-xs font-bold py-2 px-3 rounded-xl transition-all shadow-xs hover:border-pink-300"
-            >
-              Login as Cierra 🎀
-            </button>
+        {Boolean(import.meta.env.DEV) && (
+          <div className="bg-weeble-pinkWash p-4 rounded-2xl border border-pink-100 mb-6">
+            <span className="text-[11px] font-bold text-weeble-textMuted uppercase tracking-wider block mb-2">
+              Authorized Studio Access:
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                disabled={isLoading}
+                onClick={() => handleDevLogin('lucasshawn@gmail.com')}
+                className="bg-white hover:bg-pink-50 text-weeble-text border border-pink-200 text-xs font-bold py-2 px-3 rounded-xl transition-all shadow-xs hover:border-pink-300"
+              >
+                Login as Shawn 🍓
+              </button>
+              <button
+                disabled={isLoading}
+                onClick={() => handleDevLogin('lucascierra24@gmail.com')}
+                className="bg-white hover:bg-pink-50 text-weeble-text border border-pink-200 text-xs font-bold py-2 px-3 rounded-xl transition-all shadow-xs hover:border-pink-300"
+              >
+                Login as Cierra 🎀
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="text-[11px] text-weeble-textMuted border-t border-pink-100 pt-4 mb-6 text-left space-y-1">
           <div className="font-bold text-weeble-text">Authorized Admin Accounts:</div>

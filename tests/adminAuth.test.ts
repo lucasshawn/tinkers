@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { handler, ALLOWED_ADMINS } from '../netlify/functions/admin-auth';
+import crypto from 'crypto';
+import { handler, ALLOWED_ADMINS, SESSION_SECRET } from '../netlify/functions/admin-auth';
 import { adminAuth } from '../src/services/adminAuth';
 
 describe('admin-auth Netlify Function', () => {
@@ -67,15 +68,43 @@ describe('admin-auth Netlify Function', () => {
     expect(JSON.parse(res.body).error).toMatch(/missing authentication credential/i);
   });
 
-  it('decodes Google JWT credential and authenticates whitelisted user', async () => {
-    const payload = {
-      email: 'LUCASSHAWN@GMAIL.COM',
-      name: 'Shawn Lucas',
-      picture: 'https://example.com/shawn.jpg',
-    };
-    const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64');
-    const dummyJwt = `header.${encodedPayload}.signature`;
+  it('rejects devBypass in production environments with 403', async () => {
+    const originalEnv = process.env.NODE_ENV;
+    const originalNetlifyDev = process.env.NETLIFY_DEV;
+    const originalContext = process.env.CONTEXT;
 
+    process.env.NODE_ENV = 'production';
+    delete process.env.NETLIFY_DEV;
+    delete process.env.CONTEXT;
+
+    try {
+      const event = {
+        httpMethod: 'POST',
+        body: JSON.stringify({ email: 'lucasshawn@gmail.com', devBypass: true }),
+      };
+
+      const res = await handler(event as any, {} as any) as any;
+      expect(res.statusCode).toBe(403);
+      expect(JSON.parse(res.body).error).toMatch(/disabled in production/i);
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+      if (originalNetlifyDev !== undefined) process.env.NETLIFY_DEV = originalNetlifyDev;
+      if (originalContext !== undefined) process.env.CONTEXT = originalContext;
+    }
+  });
+
+  it('decodes Google JWT credential and authenticates whitelisted user', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        email: 'LUCASSHAWN@GMAIL.COM',
+        email_verified: 'true',
+        name: 'Shawn Lucas',
+        picture: 'https://example.com/shawn.jpg',
+      }),
+    } as any);
+
+    const dummyJwt = 'valid.google.jwt';
     const event = {
       httpMethod: 'POST',
       body: JSON.stringify({ credential: dummyJwt }),
@@ -92,13 +121,16 @@ describe('admin-auth Netlify Function', () => {
   });
 
   it('rejects non-whitelisted email from Google JWT credential with 403', async () => {
-    const payload = {
-      email: 'random@gmail.com',
-      name: 'Random User',
-    };
-    const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64');
-    const dummyJwt = `header.${encodedPayload}.signature`;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        email: 'random@gmail.com',
+        email_verified: 'true',
+        name: 'Random User',
+      }),
+    } as any);
 
+    const dummyJwt = 'valid.google.jwt';
     const event = {
       httpMethod: 'POST',
       body: JSON.stringify({ credential: dummyJwt }),
@@ -107,6 +139,68 @@ describe('admin-auth Netlify Function', () => {
     const res = await handler(event as any, {} as any) as any;
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body).error).toMatch(/unauthorized/i);
+  });
+
+  it('rejects invalid Google token from tokeninfo endpoint with 401', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: 'invalid_token' }),
+    } as any);
+
+    const event = {
+      httpMethod: 'POST',
+      body: JSON.stringify({ credential: 'bad-token' }),
+    };
+
+    const res = await handler(event as any, {} as any) as any;
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body).error).toMatch(/invalid google credential/i);
+  });
+
+  it('rejects unverified Google email with 401', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        email: 'lucasshawn@gmail.com',
+        email_verified: 'false',
+      }),
+    } as any);
+
+    const event = {
+      httpMethod: 'POST',
+      body: JSON.stringify({ credential: 'unverified-token' }),
+    };
+
+    const res = await handler(event as any, {} as any) as any;
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body).error).toMatch(/google email not verified/i);
+  });
+
+  it('signs token with HMAC SHA-256 and does not leak SESSION_SECRET in payload', async () => {
+    const event = {
+      httpMethod: 'POST',
+      body: JSON.stringify({ email: 'lucasshawn@gmail.com', devBypass: true }),
+    };
+
+    const res = await handler(event as any, {} as any) as any;
+    expect(res.statusCode).toBe(200);
+    const data = JSON.parse(res.body);
+
+    const parts = data.token.split('.');
+    expect(parts.length).toBe(2);
+    const [payloadBase64, signature] = parts;
+
+    // Verify HMAC signature matches
+    const expectedSig = crypto
+      .createHmac('sha256', SESSION_SECRET)
+      .update(payloadBase64)
+      .digest('hex');
+    expect(signature).toBe(expectedSig);
+
+    // Verify raw secret is NOT leaked in base64 payload
+    const decoded = Buffer.from(payloadBase64, 'base64').toString('utf-8');
+    expect(decoded).not.toContain(SESSION_SECRET);
+    expect(decoded).toMatch(/^lucasshawn@gmail\.com:\d+$/);
   });
 });
 

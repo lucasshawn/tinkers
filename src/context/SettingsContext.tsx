@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { SiteSettings } from '../types/settings';
 import defaultSettingsData from '../data/settings.json';
 
@@ -34,20 +34,22 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return DEFAULT_SETTINGS;
   });
 
-  useEffect(() => {
+  const updateSettings = (newSettings: SiteSettings) => {
+    setSettings(newSettings);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
     } catch {
       // Ignore
     }
-  }, [settings]);
-
-  const updateSettings = (newSettings: SiteSettings) => {
-    setSettings(newSettings);
   };
 
   const resetSettings = () => {
     setSettings(DEFAULT_SETTINGS);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Ignore
+    }
   };
 
   return (
