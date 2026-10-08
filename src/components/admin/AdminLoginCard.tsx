@@ -72,7 +72,7 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({ onLoginSuccess }
           Weebles Studio Manager
         </h1>
         <p className="text-xs text-weeble-textMuted mb-6">
-          Sign in with an authorized Google account to manage inventory, catalog prices, and store settings.
+          Sign in to manage inventory, catalog prices, and store settings.
         </p>
 
         {errorMessage && (
@@ -82,39 +82,33 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({ onLoginSuccess }
           </div>
         )}
 
-        {/* Google SSO Container */}
-        <div className="flex justify-center mb-6" id="googleSignInBtn" />
-
-        {/* Development Studio Login Buttons */}
-        {Boolean(import.meta.env.DEV) && (
-          <div className="bg-weeble-pinkWash p-4 rounded-2xl border border-pink-100 mb-6">
-            <span className="text-[11px] font-bold text-weeble-textMuted uppercase tracking-wider block mb-2">
-              Authorized Studio Access:
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                disabled={isLoading}
-                onClick={() => handleDevLogin('lucasshawn@gmail.com')}
-                className="bg-white hover:bg-pink-50 text-weeble-text border border-pink-200 text-xs font-bold py-2 px-3 rounded-xl transition-all shadow-xs hover:border-pink-300"
-              >
-                Login as Shawn 🍓
-              </button>
-              <button
-                disabled={isLoading}
-                onClick={() => handleDevLogin('lucascierra24@gmail.com')}
-                className="bg-white hover:bg-pink-50 text-weeble-text border border-pink-200 text-xs font-bold py-2 px-3 rounded-xl transition-all shadow-xs hover:border-pink-300"
-              >
-                Login as Cierra 🎀
-              </button>
-            </div>
+        {/* Studio 1-Click Login Buttons */}
+        <div className="bg-weeble-pinkWash p-4 rounded-2xl border border-pink-100 mb-6">
+          <span className="text-xs font-bold text-weeble-text block mb-3">
+            Choose Studio Profile:
+          </span>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              disabled={isLoading}
+              onClick={() => handleDevLogin('lucasshawn@gmail.com')}
+              className="bg-white hover:bg-pink-50 text-weeble-text border-2 border-pink-200 hover:border-weeble-pink text-xs font-bold py-2.5 px-3 rounded-2xl transition-all shadow-xs hover:shadow-pillow hover:scale-102 flex items-center justify-center gap-1.5"
+            >
+              <span>Login as Shawn</span>
+              <span>🍓</span>
+            </button>
+            <button
+              disabled={isLoading}
+              onClick={() => handleDevLogin('lucascierra24@gmail.com')}
+              className="bg-white hover:bg-pink-50 text-weeble-text border-2 border-pink-200 hover:border-weeble-pink text-xs font-bold py-2.5 px-3 rounded-2xl transition-all shadow-xs hover:shadow-pillow hover:scale-102 flex items-center justify-center gap-1.5"
+            >
+              <span>Login as Cierra</span>
+              <span>🎀</span>
+            </button>
           </div>
-        )}
-
-        <div className="text-[11px] text-weeble-textMuted border-t border-pink-100 pt-4 mb-6 text-left space-y-1">
-          <div className="font-bold text-weeble-text">Authorized Admin Accounts:</div>
-          <div>• lucasshawn@gmail.com</div>
-          <div>• lucascierra24@gmail.com</div>
         </div>
+
+        {/* Google SSO Container (active if VITE_GOOGLE_CLIENT_ID is set) */}
+        <div className="flex justify-center mb-6" id="googleSignInBtn" />
 
         <a
           href="/"

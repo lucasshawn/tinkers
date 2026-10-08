@@ -8,12 +8,14 @@ describe('AdminLoginCard', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders studio login title, whitelist notice, and return link', () => {
+  it('renders studio login title, login buttons, and return link without announcing accounts', () => {
     render(<AdminLoginCard onLoginSuccess={vi.fn()} />);
 
     expect(screen.getByText(/Weebles Studio Manager/i)).toBeInTheDocument();
-    expect(screen.getByText(/lucasshawn@gmail.com/i)).toBeInTheDocument();
-    expect(screen.getByText(/lucascierra24@gmail.com/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Login as Shawn/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Login as Cierra/i })).toBeInTheDocument();
+    expect(screen.queryByText(/lucasshawn@gmail.com/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/lucascierra24@gmail.com/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Return to Storefront/i)).toBeInTheDocument();
   });
 

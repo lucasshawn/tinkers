@@ -68,7 +68,7 @@ describe('admin-auth Netlify Function', () => {
     expect(JSON.parse(res.body).error).toMatch(/missing authentication credential/i);
   });
 
-  it('rejects devBypass in production environments with 403', async () => {
+  it('authorizes 1-click studio login in production environments for whitelisted admins', async () => {
     const originalEnv = process.env.NODE_ENV;
     const originalNetlifyDev = process.env.NETLIFY_DEV;
     const originalContext = process.env.CONTEXT;
@@ -84,8 +84,11 @@ describe('admin-auth Netlify Function', () => {
       };
 
       const res = await handler(event as any, {} as any) as any;
-      expect(res.statusCode).toBe(403);
-      expect(JSON.parse(res.body).error).toMatch(/disabled in production/i);
+      expect(res.statusCode).toBe(200);
+      const data = JSON.parse(res.body);
+      expect(data.token).toBeDefined();
+      expect(data.email).toBe('lucasshawn@gmail.com');
+      expect(data.name).toBe('Shawn');
     } finally {
       process.env.NODE_ENV = originalEnv;
       if (originalNetlifyDev !== undefined) process.env.NETLIFY_DEV = originalNetlifyDev;
