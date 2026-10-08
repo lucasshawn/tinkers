@@ -9,6 +9,8 @@ import { SocialStrip } from './components/SocialStrip';
 import { Footer } from './components/Footer';
 import { OrderSuccess } from './components/OrderSuccess';
 import { createCheckoutSession } from './services/stripe';
+import { SettingsProvider } from './context/SettingsContext';
+import { AdminPortal } from './components/admin/AdminPortal';
 import productsData from './data/products.json';
 import { Product } from './types';
 
@@ -29,6 +31,10 @@ export const AppContent: React.FC = () => {
 
   if (isSuccessPage) {
     return <OrderSuccess />;
+  }
+
+  if (window.location.pathname === '/admin') {
+    return <AdminPortal />;
   }
 
   const handleCheckout = async (giftNote: string) => {
@@ -83,9 +89,11 @@ export const AppContent: React.FC = () => {
 
 export const App: React.FC = () => {
   return (
-    <CartProvider>
-      <AppContent />
-    </CartProvider>
+    <SettingsProvider>
+      <CartProvider>
+        <AppContent />
+      </CartProvider>
+    </SettingsProvider>
   );
 };
 

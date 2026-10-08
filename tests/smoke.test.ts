@@ -27,6 +27,9 @@ describe('App smoke test', () => {
     expect(screen.getByText(/Tiny Polymer Clay Friends/i)).toBeInTheDocument();
     expect(screen.getByText(/Available Creations/i)).toBeInTheDocument();
     expect(screen.getByText(/Clay Care Instructions/i)).toBeInTheDocument();
+    const studioLink = screen.getByRole('link', { name: /Studio Login/i });
+    expect(studioLink).toBeInTheDocument();
+    expect(studioLink).toHaveAttribute('href', '/admin');
   });
 
   it('opens custom order modal from hero button', () => {
@@ -66,6 +69,22 @@ describe('App smoke test', () => {
 
     render(React.createElement(App));
     expect(screen.getByText(/Adoption Confirmed!/i)).toBeInTheDocument();
+  });
+
+  it('renders AdminPortal on /admin route', () => {
+    Object.defineProperty(window, 'location', {
+      value: {
+        ...originalLocation,
+        pathname: '/admin',
+        search: '',
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    render(React.createElement(App));
+    expect(screen.getByText(/Weebles Studio Manager/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Login as Shawn/i })).toBeInTheDocument();
   });
 
   it('renders OrderSuccess component and clears cart', () => {

@@ -52,10 +52,20 @@ export const Footer: React.FC = () => {
         </div>
       </div>
 
-      <div className="border-t border-pink-100 pt-6 text-center text-xs text-weeble-textMuted flex items-center justify-center gap-1">
-        <span>© {new Date().getFullYear()} Weebles Studio. Handcrafted with</span>
-        <Heart className="w-3.5 h-3.5 text-weeble-pink fill-weeble-pink" />
-        <span>for clay lovers everywhere.</span>
+      <div className="border-t border-pink-100 pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-weeble-textMuted gap-2">
+        <div className="flex items-center justify-center gap-1">
+          <span>© {new Date().getFullYear()} Weebles Studio. Handcrafted with</span>
+          <Heart className="w-3.5 h-3.5 text-weeble-pink fill-weeble-pink" />
+          <span>for clay lovers everywhere.</span>
+        </div>
+        <div>
+          <a
+            href="/admin"
+            className="text-xs text-pink-300 hover:text-weeble-pink transition-colors font-medium flex items-center gap-1"
+          >
+            Studio Login 🍓
+          </a>
+        </div>
       </div>
     </footer>
   );
