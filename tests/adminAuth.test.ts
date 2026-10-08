@@ -206,4 +206,22 @@ describe('adminAuth client service', () => {
 
     await expect(adminAuth.loginWithCredential('')).rejects.toThrow('Missing authentication credential');
   });
+
+  it('provides loginWithGoogle as an alias for loginWithCredential', async () => {
+    const mockSession = {
+      token: 'mock-google-token-2',
+      email: 'lucasshawn@gmail.com',
+      name: 'Shawn',
+      exp: Date.now() + 86400000,
+    };
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockSession,
+    } as any);
+
+    const session = await adminAuth.loginWithGoogle('google-jwt-test');
+    expect(session.email).toBe('lucasshawn@gmail.com');
+    expect(adminAuth.getSession()?.token).toBe('mock-google-token-2');
+  });
 });

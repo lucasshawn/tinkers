@@ -49,6 +49,10 @@ export const adminAuth = {
     return session;
   },
 
+  async loginWithGoogle(credential: string): Promise<AdminSession> {
+    return this.loginWithCredential(credential);
+  },
+
   async devLogin(email = 'lucasshawn@gmail.com'): Promise<AdminSession> {
     const res = await fetch('/.netlify/functions/admin-auth', {
       method: 'POST',
