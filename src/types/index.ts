@@ -1,3 +1,5 @@
+export * from './settings';
+
 export type VariantType = 'magnet' | 'keychain';
 
 export interface Product {

@@ -1,7 +1,11 @@
 import React from 'react';
 import { Heart } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext';
 
 export const Footer: React.FC = () => {
+  const { settings } = useSettings();
+  const contactEmail = settings?.contactEmail || 'weeblesclay@gmail.com';
+
   return (
     <footer id="about" className="bg-white border-t-2 border-pink-100 pt-12 pb-8 px-4 sm:px-6 lg:px-8 mt-16">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
@@ -37,10 +41,10 @@ export const Footer: React.FC = () => {
             Questions about restocks or wholesale?
           </p>
           <a
-            href="mailto:weeblesclay@gmail.com"
+            href={`mailto:${contactEmail}`}
             className="text-sm font-bold text-weeble-pink hover:underline"
           >
-            weeblesclay@gmail.com
+            {contactEmail}
           </a>
           <p className="text-xs text-weeble-textMuted mt-3">
             📦 Ships safely bubble-wrapped with collectible stickers and surprise candy!

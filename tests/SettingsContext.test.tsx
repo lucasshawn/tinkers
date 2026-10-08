@@ -1,0 +1,80 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import React from 'react';
+import { SettingsProvider, useSettings } from '../src/context/SettingsContext';
+
+describe('SettingsContext', () => {
+  beforeEach(() => {
+    localStorage.removeItem('weebles_settings_v1');
+  });
+
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <SettingsProvider>{children}</SettingsProvider>
+  );
+
+  it('provides default site settings matching current live site', () => {
+    const { result } = renderHook(() => useSettings(), { wrapper });
+
+    expect(result.current.settings.contactEmail).toBe('weeblesclay@gmail.com');
+    expect(result.current.settings.customOrderEmail).toBe('weeblesclay@gmail.com');
+    expect(result.current.settings.socials.tiktok).toBe('https://tiktok.com/@weebles_clay');
+    expect(result.current.settings.socials.instagram).toBe('https://instagram.com/weebles_clay');
+    expect(result.current.settings.socials.facebookMarketplace).toBe('https://facebook.com/marketplace');
+  });
+
+  it('updates settings and persists to state', () => {
+    const { result } = renderHook(() => useSettings(), { wrapper });
+
+    act(() => {
+      result.current.updateSettings({
+        ...result.current.settings,
+        contactEmail: 'newcontact@weebles.com',
+      });
+    });
+
+    expect(result.current.settings.contactEmail).toBe('newcontact@weebles.com');
+  });
+
+  it('resets settings back to default', () => {
+    const { result } = renderHook(() => useSettings(), { wrapper });
+
+    act(() => {
+      result.current.updateSettings({
+        ...result.current.settings,
+        contactEmail: 'custom@weebles.com',
+      });
+    });
+
+    expect(result.current.settings.contactEmail).toBe('custom@weebles.com');
+
+    act(() => {
+      result.current.resetSettings();
+    });
+
+    expect(result.current.settings.contactEmail).toBe('weeblesclay@gmail.com');
+  });
+
+  it('gracefully returns default settings when used outside of SettingsProvider', () => {
+    const { result } = renderHook(() => useSettings());
+
+    expect(result.current.settings.contactEmail).toBe('weeblesclay@gmail.com');
+    expect(result.current.settings.socials.tiktok).toBe('https://tiktok.com/@weebles_clay');
+  });
+
+  it('initializes from localStorage if valid data is present', () => {
+    const stored = {
+      contactEmail: 'stored@weebles.com',
+      customOrderEmail: 'stored@weebles.com',
+      socials: {
+        tiktok: 'https://tiktok.com/@stored',
+        instagram: 'https://instagram.com/stored',
+        facebookMarketplace: 'https://facebook.com/marketplace/stored',
+      },
+    };
+    localStorage.setItem('weebles_settings_v1', JSON.stringify(stored));
+
+    const { result } = renderHook(() => useSettings(), { wrapper });
+    expect(result.current.settings.contactEmail).toBe('stored@weebles.com');
+    expect(result.current.settings.socials.tiktok).toBe('https://tiktok.com/@stored');
+  });
+});

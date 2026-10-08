@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Send, Sparkles, CheckCircle2 } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext';
 
 export interface CustomOrderModalProps {
   isOpen: boolean;
@@ -7,6 +8,8 @@ export interface CustomOrderModalProps {
 }
 
 export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onClose }) => {
+  const { settings } = useSettings();
+  const customOrderEmail = settings?.customOrderEmail || 'weeblesclay@gmail.com';
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -112,6 +115,7 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
               className="space-y-4"
             >
               <input type="hidden" name="form-name" value="custom-requests" />
+              <input type="hidden" name="customOrderEmail" value={customOrderEmail} />
 
               <div>
                 <label htmlFor="name" className="block text-xs font-bold text-weeble-text mb-1">
@@ -196,6 +200,13 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
                 <Send className="w-4 h-4" />
                 <span>{isSubmitting ? 'Sending Request...' : 'Send Custom Request 💌'}</span>
               </button>
+
+              <p className="text-center text-xs text-weeble-textMuted mt-3">
+                Prefer direct email? Reach us at{' '}
+                <a href={`mailto:${customOrderEmail}`} className="font-bold text-weeble-pink hover:underline">
+                  {customOrderEmail}
+                </a>
+              </p>
             </form>
           </div>
         )}
