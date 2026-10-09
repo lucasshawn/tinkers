@@ -52,21 +52,4 @@ export const adminAuth = {
   async loginWithGoogle(credential: string): Promise<AdminSession> {
     return this.loginWithCredential(credential);
   },
-
-  async devLogin(email = 'lucasshawn@gmail.com'): Promise<AdminSession> {
-    const res = await fetch('/.netlify/functions/admin-auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, devBypass: true }),
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || 'Dev login failed');
-    }
-
-    const session: AdminSession = await res.json();
-    this.setSession(session);
-    return session;
-  },
 };

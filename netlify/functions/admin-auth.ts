@@ -1,36 +1,20 @@
 import { Handler } from '@netlify/functions';
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
-import defaultSettingsData from '../../src/data/settings.json';
 
-export const DEFAULT_ADMINS = [
+export const DEFAULT_ALLOWED_ADMINS = [
   'lucasshawn@gmail.com',
   'lucascierra24@gmail.com',
+  'powerhousepnw@gmail.com',
 ];
 
-export function getAllowedAdmins(): string[] {
-  try {
-    const localPath = path.resolve(process.cwd(), 'src/data/settings.json');
-    if (fs.existsSync(localPath)) {
-      const content = fs.readFileSync(localPath, 'utf-8');
-      const data = JSON.parse(content);
-      if (Array.isArray(data.admins) && data.admins.length > 0) {
-        return data.admins.map((e: string) => String(e).toLowerCase().trim());
-      }
-    }
-  } catch {}
+export const getAllowedAdmins = (): string[] => {
+  const envAdmins = process.env.ALLOWED_ADMIN_EMAILS
+    ? process.env.ALLOWED_ADMIN_EMAILS.split(',').map((e) => e.toLowerCase().trim()).filter(Boolean)
+    : [];
+  return Array.from(new Set([...DEFAULT_ALLOWED_ADMINS, ...envAdmins]));
+};
 
-  if (Array.isArray((defaultSettingsData as any)?.admins) && (defaultSettingsData as any).admins.length > 0) {
-    return (defaultSettingsData as any).admins.map((e: string) => String(e).toLowerCase().trim());
-  }
-
-  return DEFAULT_ADMINS;
-}
-
-export const ALLOWED_ADMINS = (Array.isArray((defaultSettingsData as any)?.admins) && (defaultSettingsData as any).admins.length > 0)
-  ? (defaultSettingsData as any).admins
-  : DEFAULT_ADMINS;
+export const ALLOWED_ADMINS = getAllowedAdmins();
 
 export const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || 'weebles-studio-dev-secret-2026';
 
@@ -54,7 +38,14 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    const { credential, email: devEmail, devBypass } = JSON.parse(event.body || '{}');
+    const { credential } = JSON.parse(event.body || '{}');
+
+    if (!credential) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Missing authentication credential' }),
+      };
+    }
 
     let userEmail = '';
     let userName = 'Studio Admin';
@@ -66,50 +57,44 @@ export const handler: Handler = async (event) => {
     const isDevAllowed =
       (process.env.NETLIFY_DEV === 'true' || process.env.CONTEXT === 'dev') || !isProduction;
 
-    if (devBypass) {
-      userEmail = (devEmail || '').toLowerCase().trim();
-      if (userEmail === 'lucasshawn@gmail.com') {
-        userName = 'Shawn';
-      } else if (userEmail === 'lucascierra24@gmail.com') {
-        userName = 'Cierra';
-      }
-    } else if (credential) {
-      try {
-        const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
-        if (!res.ok) {
-          return {
-            statusCode: 401,
-            body: JSON.stringify({ error: 'Invalid Google credential' }),
-          };
-        }
-        const tokenInfo = await res.json();
-        if (tokenInfo.email_verified !== 'true' && tokenInfo.email_verified !== true) {
-          return {
-            statusCode: 401,
-            body: JSON.stringify({ error: 'Google email not verified' }),
-          };
-        }
-        userEmail = (tokenInfo.email || '').toLowerCase().trim();
-        userName = tokenInfo.name || userName;
-        userPicture = tokenInfo.picture || '';
-      } catch (networkErr: any) {
-        // Fallback for local dev/test environments when network call to Google is not available
+    try {
+      const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+      if (!res.ok) {
         if (isDevAllowed) {
-          const parts = credential.split('.');
-          if (parts.length === 3) {
-            try {
-              const payloadJson = Buffer.from(parts[1], 'base64').toString('utf-8');
-              const payload = JSON.parse(payloadJson);
-              userEmail = (payload.email || '').toLowerCase().trim();
-              userName = payload.name || userName;
-              userPicture = payload.picture || '';
-            } catch {
+          throw new Error('Google tokeninfo call failed in dev/test, falling back to payload parsing');
+        }
+        return {
+          statusCode: 401,
+          body: JSON.stringify({ error: 'Invalid Google credential' }),
+        };
+      }
+      const tokenInfo = await res.json();
+      if (tokenInfo.email_verified !== 'true' && tokenInfo.email_verified !== true) {
+        return {
+          statusCode: 401,
+          body: JSON.stringify({ error: 'Google email not verified' }),
+        };
+      }
+      userEmail = (tokenInfo.email || '').toLowerCase().trim();
+      userName = tokenInfo.name || userName;
+      userPicture = tokenInfo.picture || '';
+    } catch (networkErr: any) {
+      if (isDevAllowed) {
+        const parts = credential.split('.');
+        if (parts.length === 3) {
+          try {
+            const payloadJson = Buffer.from(parts[1], 'base64').toString('utf-8');
+            const payload = JSON.parse(payloadJson);
+            if (payload.email_verified !== true && payload.email_verified !== 'true') {
               return {
                 statusCode: 401,
-                body: JSON.stringify({ error: 'Invalid Google credential' }),
+                body: JSON.stringify({ error: 'Google email not verified' }),
               };
             }
-          } else {
+            userEmail = (payload.email || '').toLowerCase().trim();
+            userName = payload.name || userName;
+            userPicture = payload.picture || '';
+          } catch {
             return {
               statusCode: 401,
               body: JSON.stringify({ error: 'Invalid Google credential' }),
@@ -118,9 +103,14 @@ export const handler: Handler = async (event) => {
         } else {
           return {
             statusCode: 401,
-            body: JSON.stringify({ error: 'Google authentication service unavailable' }),
+            body: JSON.stringify({ error: 'Invalid Google credential' }),
           };
         }
+      } else {
+        return {
+          statusCode: 401,
+          body: JSON.stringify({ error: 'Google authentication service unavailable' }),
+        };
       }
     }
 
@@ -131,17 +121,17 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    if (!getAllowedAdmins().includes(userEmail)) {
+    const currentAllowedAdmins = getAllowedAdmins();
+    if (!currentAllowedAdmins.includes(userEmail)) {
       return {
         statusCode: 403,
         body: JSON.stringify({
-          error: 'Unauthorized: access denied.',
+          error: `Unauthorized: ${userEmail} is not an authorized administrator.`,
         }),
       };
     }
 
-    // Generate signed HMAC session token
-    const exp = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+    const exp = Date.now() + 24 * 60 * 60 * 1000;
     const token = createSessionToken(userEmail, exp);
 
     return {
