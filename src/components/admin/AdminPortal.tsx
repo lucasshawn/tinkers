@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import { LogOut, ArrowLeft, Layers, Settings } from 'lucide-react';
+import { LogOut, ArrowLeft, Layers, Users, CreditCard, Palette } from 'lucide-react';
 import { adminAuth, AdminSession } from '../../services/adminAuth';
 import { adminApi } from '../../services/adminApi';
 import { AdminLoginCard } from './AdminLoginCard';
+import { AdminsTab } from './AdminsTab';
 import { InventoryTab } from './InventoryTab';
-import { SettingsTab } from './SettingsTab';
+import { PaymentsTab } from './PaymentsTab';
+import { ContentTab } from './ContentTab';
 import { useSettings } from '../../context/SettingsContext';
 import initialProductsData from '../../data/products.json';
 import { Product } from '../../types';
 import { SiteSettings } from '../../types/settings';
 
+type AdminTab = 'admins' | 'catalog' | 'payments' | 'content';
+
 export const AdminPortal: React.FC = () => {
   const [session, setSession] = useState<AdminSession | null>(() => adminAuth.getSession());
-  const [activeTab, setActiveTab] = useState<'inventory' | 'settings'>('inventory');
+  const [activeTab, setActiveTab] = useState<AdminTab>('catalog');
   const [products, setProducts] = useState<Product[]>(() => {
     const raw = (initialProductsData as any)?.products || initialProductsData;
     return Array.isArray(raw) ? raw : [];
@@ -59,6 +63,22 @@ export const AdminPortal: React.FC = () => {
     }
   };
 
+  const handleSaveAdmins = async (updatedAdmins: string[]) => {
+    setErrorMessage(null);
+    try {
+      const res = await adminApi.saveAdmins(updatedAdmins);
+      updateSettings({
+        ...settings,
+        admins: updatedAdmins,
+      });
+      setNotification(res.message);
+      setTimeout(() => setNotification(null), 4000);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to save admin whitelist');
+      setTimeout(() => setErrorMessage(null), 5000);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-weeble-pinkBg flex flex-col">
       {/* Top Admin Header */}
@@ -88,7 +108,7 @@ export const AdminPortal: React.FC = () => {
             </a>
             <button
               onClick={handleLogout}
-              className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors"
+              className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Log Out</span>
@@ -111,37 +131,82 @@ export const AdminPortal: React.FC = () => {
           </div>
         )}
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-3 border-b-2 border-pink-200 pb-3 mb-6">
+        {/* 4-Tab Navigation */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 border-b-2 border-pink-200 pb-3 mb-6">
           <button
-            onClick={() => setActiveTab('inventory')}
-            className={`font-bubble text-sm sm:text-base font-bold px-5 py-2.5 rounded-full transition-all flex items-center gap-2 ${
-              activeTab === 'inventory'
+            onClick={() => setActiveTab('admins')}
+            className={`font-bubble text-sm sm:text-base font-bold px-4 sm:px-5 py-2.5 rounded-full transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'admins'
+                ? 'bg-weeble-pink text-white shadow-pillow scale-102'
+                : 'bg-white text-weeble-text border border-pink-200 hover:bg-weeble-pinkWash'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>👥 Manage Admins</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('catalog')}
+            className={`font-bubble text-sm sm:text-base font-bold px-4 sm:px-5 py-2.5 rounded-full transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'catalog'
                 ? 'bg-weeble-pink text-white shadow-pillow scale-102'
                 : 'bg-white text-weeble-text border border-pink-200 hover:bg-weeble-pinkWash'
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>🍓 Inventory Catalog</span>
+            <span>🍓 Manage Catalog</span>
           </button>
+
           <button
-            onClick={() => setActiveTab('settings')}
-            className={`font-bubble text-sm sm:text-base font-bold px-5 py-2.5 rounded-full transition-all flex items-center gap-2 ${
-              activeTab === 'settings'
+            onClick={() => setActiveTab('payments')}
+            className={`font-bubble text-sm sm:text-base font-bold px-4 sm:px-5 py-2.5 rounded-full transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'payments'
                 ? 'bg-weeble-pink text-white shadow-pillow scale-102'
                 : 'bg-white text-weeble-text border border-pink-200 hover:bg-weeble-pinkWash'
             }`}
           >
-            <Settings className="w-4 h-4" />
-            <span>⚙️ Store & Social Settings</span>
+            <CreditCard className="w-4 h-4" />
+            <span>💳 Manage Payments</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('content')}
+            className={`font-bubble text-sm sm:text-base font-bold px-4 sm:px-5 py-2.5 rounded-full transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'content'
+                ? 'bg-weeble-pink text-white shadow-pillow scale-102'
+                : 'bg-white text-weeble-text border border-pink-200 hover:bg-weeble-pinkWash'
+            }`}
+          >
+            <Palette className="w-4 h-4" />
+            <span>🎨 Manage Site Content</span>
           </button>
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'inventory' ? (
-          <InventoryTab products={products} onSave={handleSaveInventory} />
-        ) : (
-          <SettingsTab settings={settings} onSave={handleSaveSettings} />
+        {activeTab === 'admins' && (
+          <AdminsTab
+            admins={settings.admins || []}
+            currentAdminEmail={session.email}
+            onSave={handleSaveAdmins}
+          />
+        )}
+
+        {activeTab === 'catalog' && (
+          <InventoryTab
+            products={products}
+            onSave={handleSaveInventory}
+          />
+        )}
+
+        {activeTab === 'payments' && (
+          <PaymentsTab />
+        )}
+
+        {activeTab === 'content' && (
+          <ContentTab
+            settings={settings}
+            onSave={handleSaveSettings}
+          />
         )}
       </main>
     </div>

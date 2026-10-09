@@ -3,12 +3,19 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AdminPortal } from '../src/components/admin/AdminPortal';
 import { adminAuth } from '../src/services/adminAuth';
 import { adminApi } from '../src/services/adminApi';
+import { adminPayments } from '../src/services/adminPayments';
 import { SettingsProvider } from '../src/context/SettingsContext';
 
 describe('AdminPortal', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
+    vi.spyOn(adminPayments, 'fetchPayments').mockResolvedValue({
+      connected: false,
+      mode: 'demo',
+      summary: { totalRevenue: 109, orderCount: 4, averageOrderValue: 27.25 },
+      transactions: [],
+    });
   });
 
   afterEach(() => {
@@ -28,7 +35,7 @@ describe('AdminPortal', () => {
     expect(screen.getByText(/Return to Storefront/i)).toBeInTheDocument();
   });
 
-  it('renders dashboard with tabs when authenticated', () => {
+  it('renders dashboard with 4 tabs when authenticated', () => {
     adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
 
     render(
@@ -41,13 +48,18 @@ describe('AdminPortal', () => {
     expect(screen.getByText(/lucasshawn@gmail.com/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /View Store/i })).toHaveAttribute('href', '/');
     expect(screen.getByRole('button', { name: /Log Out/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Inventory Catalog/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Store & Social Settings/i })).toBeInTheDocument();
-    // Default tab is Inventory
+
+    // 4 tabs present
+    expect(screen.getByRole('button', { name: /Manage Admins/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Manage Catalog/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Manage Payments/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Manage Site Content/i })).toBeInTheDocument();
+
+    // Default tab is Catalog
     expect(screen.getByRole('button', { name: /\+ Add New Weeble/i })).toBeInTheDocument();
   });
 
-  it('switches between Inventory and Settings tabs', () => {
+  it('switches between all 4 tabs smoothly', async () => {
     adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
 
     render(
@@ -56,26 +68,32 @@ describe('AdminPortal', () => {
       </SettingsProvider>
     );
 
-    // Click Settings tab
-    const settingsTabBtn = screen.getByRole('button', { name: /Store & Social Settings/i });
-    fireEvent.click(settingsTabBtn);
-
-    expect(screen.getByText(/Studio Emails/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Save & Publish Settings/i })).toBeInTheDocument();
+    // 1. Switch to Manage Admins
+    fireEvent.click(screen.getByRole('button', { name: /Manage Admins/i }));
+    expect(screen.getByRole('button', { name: /Add Admin/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /\+ Add New Weeble/i })).not.toBeInTheDocument();
 
-    // Click Inventory tab back
-    const inventoryTabBtn = screen.getByRole('button', { name: /Inventory Catalog/i });
-    fireEvent.click(inventoryTabBtn);
+    // 2. Switch to Manage Payments
+    fireEvent.click(screen.getByRole('button', { name: /Manage Payments/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/Open Stripe Dashboard/i)).toBeInTheDocument();
+    });
 
+    // 3. Switch to Manage Site Content
+    fireEvent.click(screen.getByRole('button', { name: /Manage Site Content/i }));
+    expect(screen.getByText(/Storefront Announcement Banner/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Save & Publish Site Content/i })).toBeInTheDocument();
+
+    // 4. Switch back to Manage Catalog
+    fireEvent.click(screen.getByRole('button', { name: /Manage Catalog/i }));
     expect(screen.getByRole('button', { name: /\+ Add New Weeble/i })).toBeInTheDocument();
   });
 
-  it('handles saving settings and displays notification banner', async () => {
+  it('handles saving admin whitelist and displays notification banner', async () => {
     adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
-    vi.spyOn(adminApi, 'saveSettings').mockResolvedValue({
+    vi.spyOn(adminApi, 'saveAdmins').mockResolvedValue({
       success: true,
-      message: 'Settings updated successfully!',
+      message: 'Admin whitelist saved successfully!',
     });
 
     render(
@@ -84,16 +102,43 @@ describe('AdminPortal', () => {
       </SettingsProvider>
     );
 
-    // Navigate to settings tab
-    const settingsTabBtn = screen.getByRole('button', { name: /Store & Social Settings/i });
-    fireEvent.click(settingsTabBtn);
+    // Navigate to Manage Admins tab
+    fireEvent.click(screen.getByRole('button', { name: /Manage Admins/i }));
 
-    const saveBtn = screen.getByRole('button', { name: /Save & Publish Settings/i });
+    const input = screen.getByPlaceholderText(/friend@gmail.com/i);
+    fireEvent.change(input, { target: { value: 'newadmin@gmail.com' } });
+
+    const addBtn = screen.getByRole('button', { name: /Add Admin/i });
+    fireEvent.click(addBtn);
+
+    await waitFor(() => {
+      expect(adminApi.saveAdmins).toHaveBeenCalled();
+      expect(screen.getByText('Admin whitelist saved successfully!')).toBeInTheDocument();
+    });
+  });
+
+  it('handles saving site content and displays notification banner', async () => {
+    adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
+    vi.spyOn(adminApi, 'saveSettings').mockResolvedValue({
+      success: true,
+      message: 'Site content updated successfully!',
+    });
+
+    render(
+      <SettingsProvider>
+        <AdminPortal />
+      </SettingsProvider>
+    );
+
+    // Navigate to Manage Site Content tab
+    fireEvent.click(screen.getByRole('button', { name: /Manage Site Content/i }));
+
+    const saveBtn = screen.getByRole('button', { name: /Save & Publish Site Content/i });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
       expect(adminApi.saveSettings).toHaveBeenCalled();
-      expect(screen.getByText('Settings updated successfully!')).toBeInTheDocument();
+      expect(screen.getByText('Site content updated successfully!')).toBeInTheDocument();
     });
   });
 

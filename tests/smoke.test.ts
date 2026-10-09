@@ -156,4 +156,26 @@ describe('App smoke test', () => {
       })
     );
   });
+
+  it('renders storefront announcement banner when configured in settings', () => {
+    localStorage.setItem(
+      'weebles_settings_v1',
+      JSON.stringify({
+        contactEmail: 'weeblesclay@gmail.com',
+        customOrderEmail: 'customorders@weeblesclay.com',
+        socials: {
+          tiktok: 'https://tiktok.com/@weebles_clay',
+          instagram: 'https://instagram.com/weebles_clay',
+          facebookMarketplace: 'https://facebook.com/marketplace',
+        },
+        announcementBanner: {
+          enabled: true,
+          text: '🌸 Welcome to Weebles! Fall Restock is Live!',
+        },
+      })
+    );
+
+    render(React.createElement(App));
+    expect(screen.getByText(/Fall Restock is Live!/i)).toBeInTheDocument();
+  });
 });

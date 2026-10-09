@@ -9,13 +9,15 @@ import { SocialStrip } from './components/SocialStrip';
 import { Footer } from './components/Footer';
 import { OrderSuccess } from './components/OrderSuccess';
 import { createCheckoutSession } from './services/stripe';
-import { SettingsProvider } from './context/SettingsContext';
+import { SettingsProvider, useSettings } from './context/SettingsContext';
 import { AdminPortal } from './components/admin/AdminPortal';
+import { AnnouncementBanner } from './components/AnnouncementBanner';
 import productsData from './data/products.json';
 import { Product } from './types';
 
 export const AppContent: React.FC = () => {
   const { items } = useCart();
+  const { settings } = useSettings();
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
 
@@ -56,6 +58,7 @@ export const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-weeble-pinkBg">
+      <AnnouncementBanner banner={settings.announcementBanner} />
       <Navbar onOpenCustomModal={() => setIsCustomModalOpen(true)} />
 
       <main className="flex-1">
