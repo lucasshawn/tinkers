@@ -1,3 +1,8 @@
+export interface AnnouncementBannerSettings {
+  enabled: boolean;
+  text: string;
+}
+
 export interface SiteSettings {
   contactEmail: string;
   customOrderEmail: string;
@@ -6,4 +11,6 @@ export interface SiteSettings {
     instagram: string;
     facebookMarketplace: string;
   };
+  announcementBanner?: AnnouncementBannerSettings;
+  admins?: string[];
 }

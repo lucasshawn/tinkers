@@ -331,6 +331,64 @@ describe('admin-save Netlify Function', () => {
     expect(body.error).toMatch(/Conflict: sha does not match/i);
   });
 
+  it('saves updated admin whitelist in dev mode', async () => {
+    const validToken = createSessionToken('lucasshawn@gmail.com', 9999999999999);
+    const event = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'admins',
+        admins: ['lucasshawn@gmail.com', 'lucascierra24@gmail.com', 'newadmin@gmail.com'],
+      }),
+    };
+
+    const res = await handler(event as any, {} as any) as any;
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).success).toBe(true);
+  });
+
+  it('commits admins whitelist to GitHub when GITHUB_TOKEN is set', async () => {
+    process.env.GITHUB_TOKEN = 'ghp_test_token_123';
+    process.env.GITHUB_REPO = 'lucasshawn/tinkers';
+    process.env.GITHUB_BRANCH = 'master';
+
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ sha: 'settings-sha-789' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ commit: { sha: 'new-admins-sha' } }),
+      });
+    globalThis.fetch = mockFetch;
+
+    const event = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'admins',
+        admins: ['lucasshawn@gmail.com', 'lucascierra24@gmail.com', 'newadmin@gmail.com'],
+      }),
+    };
+
+    const res = await handler(event as any, {} as any) as any;
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.success).toBe(true);
+    expect(body.message).toMatch(/committed to github/i);
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      'https://api.github.com/repos/lucasshawn/tinkers/contents/src/data/settings.json',
+      expect.objectContaining({
+        method: 'PUT',
+        body: expect.stringContaining('"sha":"settings-sha-789"'),
+      })
+    );
+  });
+
   it('rejects invalid save payload with 400', async () => {
     const event = {
       httpMethod: 'POST',
@@ -490,5 +548,53 @@ describe('adminApi client service', () => {
     });
 
     await expect(adminApi.saveSettings(mockSettings)).rejects.toThrow('Disk full');
+  });
+
+  it('saveAdmins throws error when not authenticated', async () => {
+    await expect(adminApi.saveAdmins(['lucasshawn@gmail.com'])).rejects.toThrow(/not authenticated/i);
+  });
+
+  it('saveAdmins posts payload with session Bearer token and returns response', async () => {
+    adminAuth.setSession({
+      token: 'admins-token',
+      email: 'lucasshawn@gmail.com',
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, message: 'Admin whitelist saved' }),
+    });
+    globalThis.fetch = mockFetch;
+
+    const result = await adminApi.saveAdmins(['lucasshawn@gmail.com', 'lucascierra24@gmail.com', 'newadmin@gmail.com']);
+    expect(result.success).toBe(true);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/.netlify/functions/admin-save',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer admins-token',
+        },
+        body: JSON.stringify({
+          type: 'admins',
+          admins: ['lucasshawn@gmail.com', 'lucascierra24@gmail.com', 'newadmin@gmail.com'],
+        }),
+      })
+    );
+  });
+
+  it('saveAdmins throws error when API returns failure status', async () => {
+    adminAuth.setSession({
+      token: 'admins-token',
+      email: 'lucasshawn@gmail.com',
+    });
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: 'Forbidden' }),
+    });
+
+    await expect(adminApi.saveAdmins(['lucasshawn@gmail.com'])).rejects.toThrow('Forbidden');
   });
 });

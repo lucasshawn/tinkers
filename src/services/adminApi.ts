@@ -54,4 +54,29 @@ export const adminApi = {
 
     return res.json();
   },
+
+  async saveAdmins(admins: string[]): Promise<{ success: boolean; message: string }> {
+    const session = adminAuth.getSession();
+    if (!session) throw new Error('Not authenticated');
+
+    const res = await fetch('/.netlify/functions/admin-save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({
+        type: 'admins',
+        admins,
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to save admin whitelist');
+    }
+
+    return res.json();
+  },
 };
+

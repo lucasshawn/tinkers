@@ -5,5 +5,13 @@
     "tiktok": "https://tiktok.com/@weebles_clay",
     "instagram": "https://instagram.com/weebles_clay",
     "facebookMarketplace": "https://facebook.com/marketplace"
-  }
+  },
+  "announcementBanner": {
+    "enabled": false,
+    "text": ""
+  },
+  "admins": [
+    "lucasshawn@gmail.com",
+    "lucascierra24@gmail.com"
+  ]
 }

@@ -2,7 +2,8 @@ import { Handler } from '@netlify/functions';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { ALLOWED_ADMINS } from './admin-auth';
+import { getAllowedAdmins } from './admin-auth';
+import defaultSettingsData from '../../src/data/settings.json';
 
 function verifyToken(authHeader?: string): string | null {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
@@ -17,7 +18,8 @@ function verifyToken(authHeader?: string): string | null {
     const [email, exp] = decoded.split(':');
     if (!email || !exp || isNaN(Number(exp))) return null;
     if (Number(exp) < Date.now()) return null;
-    if (!ALLOWED_ADMINS.includes(email.toLowerCase())) return null;
+    const allowedAdmins = getAllowedAdmins();
+    if (!allowedAdmins.includes(email.toLowerCase())) return null;
     return email.toLowerCase();
   } catch {
     return null;
@@ -85,7 +87,7 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    const { type, products, settings, newImage } = JSON.parse(event.body || '{}');
+    const { type, products, settings, admins, newImage } = JSON.parse(event.body || '{}');
     const githubToken = process.env.GITHUB_TOKEN || '';
 
     // 1. Handle image upload if present
@@ -129,7 +131,25 @@ export const handler: Handler = async (event) => {
 
     // 3. Handle settings update
     if (type === 'settings' && settings) {
-      const jsonString = JSON.stringify(settings, null, 2) + '\n';
+      let mergedSettings = { ...settings };
+      // Preserve existing admins if not explicitly provided in settings update
+      if (!mergedSettings.admins) {
+        let currentSettings = { ...defaultSettingsData };
+        const localPath = path.resolve(process.cwd(), 'src/data/settings.json');
+        try {
+          if (fs.existsSync(localPath)) {
+            const fileContent = fs.readFileSync(localPath, 'utf-8');
+            if (fileContent) {
+              currentSettings = { ...currentSettings, ...JSON.parse(fileContent) };
+            }
+          }
+        } catch {}
+        if (currentSettings.admins) {
+          mergedSettings.admins = currentSettings.admins;
+        }
+      }
+
+      const jsonString = JSON.stringify(mergedSettings, null, 2) + '\n';
       const base64Content = Buffer.from(jsonString).toString('base64');
 
       if (githubToken) {
@@ -147,6 +167,41 @@ export const handler: Handler = async (event) => {
           message: githubToken
             ? 'Settings saved and committed to GitHub. Netlify deploy triggered!'
             : 'Settings saved locally (Dev Mode).',
+        }),
+      };
+    }
+
+    // 4. Handle admins update
+    if (type === 'admins' && Array.isArray(admins)) {
+      let currentSettings = { ...defaultSettingsData };
+      const localPath = path.resolve(process.cwd(), 'src/data/settings.json');
+      try {
+        if (fs.existsSync(localPath)) {
+          const fileContent = fs.readFileSync(localPath, 'utf-8');
+          if (fileContent) {
+            currentSettings = { ...currentSettings, ...JSON.parse(fileContent) };
+          }
+        }
+      } catch {}
+
+      currentSettings.admins = admins.map((e: string) => e.toLowerCase().trim());
+      const jsonString = JSON.stringify(currentSettings, null, 2) + '\n';
+      const base64Content = Buffer.from(jsonString).toString('base64');
+
+      if (githubToken) {
+        await commitToGitHub('src/data/settings.json', base64Content, 'chore(admin): update admin whitelist from studio portal');
+      } else {
+        fs.writeFileSync(localPath, jsonString);
+      }
+
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          success: true,
+          message: githubToken
+            ? 'Admin whitelist saved and committed to GitHub. Netlify deploy triggered!'
+            : 'Admin whitelist saved locally (Dev Mode).',
         }),
       };
     }

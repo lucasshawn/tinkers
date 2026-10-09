@@ -1,10 +1,36 @@
 import { Handler } from '@netlify/functions';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import defaultSettingsData from '../../src/data/settings.json';
 
-export const ALLOWED_ADMINS = [
+export const DEFAULT_ADMINS = [
   'lucasshawn@gmail.com',
   'lucascierra24@gmail.com',
 ];
+
+export function getAllowedAdmins(): string[] {
+  try {
+    const localPath = path.resolve(process.cwd(), 'src/data/settings.json');
+    if (fs.existsSync(localPath)) {
+      const content = fs.readFileSync(localPath, 'utf-8');
+      const data = JSON.parse(content);
+      if (Array.isArray(data.admins) && data.admins.length > 0) {
+        return data.admins.map((e: string) => String(e).toLowerCase().trim());
+      }
+    }
+  } catch {}
+
+  if (Array.isArray((defaultSettingsData as any)?.admins) && (defaultSettingsData as any).admins.length > 0) {
+    return (defaultSettingsData as any).admins.map((e: string) => String(e).toLowerCase().trim());
+  }
+
+  return DEFAULT_ADMINS;
+}
+
+export const ALLOWED_ADMINS = (Array.isArray((defaultSettingsData as any)?.admins) && (defaultSettingsData as any).admins.length > 0)
+  ? (defaultSettingsData as any).admins
+  : DEFAULT_ADMINS;
 
 export const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || 'weebles-studio-dev-secret-2026';
 
@@ -105,7 +131,7 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    if (!ALLOWED_ADMINS.includes(userEmail)) {
+    if (!getAllowedAdmins().includes(userEmail)) {
       return {
         statusCode: 403,
         body: JSON.stringify({

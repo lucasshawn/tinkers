@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import crypto from 'crypto';
-import { handler, ALLOWED_ADMINS, SESSION_SECRET } from '../netlify/functions/admin-auth';
+import { handler, ALLOWED_ADMINS, getAllowedAdmins, SESSION_SECRET } from '../netlify/functions/admin-auth';
 import { adminAuth } from '../src/services/adminAuth';
 
 describe('admin-auth Netlify Function', () => {
@@ -8,6 +8,13 @@ describe('admin-auth Netlify Function', () => {
     expect(ALLOWED_ADMINS).toContain('lucasshawn@gmail.com');
     expect(ALLOWED_ADMINS).toContain('lucascierra24@gmail.com');
     expect(ALLOWED_ADMINS.length).toBe(2);
+  });
+
+  it('dynamically resolves authorized admins from settings', () => {
+    const admins = getAllowedAdmins();
+    expect(admins).toContain('lucasshawn@gmail.com');
+    expect(admins).toContain('lucascierra24@gmail.com');
+    expect(Array.isArray(admins)).toBe(true);
   });
 
   it('rejects unauthorized email with 403 Forbidden', async () => {
