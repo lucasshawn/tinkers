@@ -84,7 +84,7 @@ describe('App smoke test', () => {
 
     render(React.createElement(App));
     expect(screen.getByText(/Weebles Studio Manager/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Login as Shawn/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Login as Shawn/i })).not.toBeInTheDocument();
   });
 
   it('renders OrderSuccess component and clears cart', () => {
