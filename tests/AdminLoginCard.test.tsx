@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
+import React from 'react';
 import { AdminLoginCard } from '../src/components/admin/AdminLoginCard';
 import { adminAuth } from '../src/services/adminAuth';
 
@@ -8,137 +9,108 @@ describe('AdminLoginCard', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders studio login title, login buttons, and return link without announcing accounts', () => {
+  it('renders studio login title and return link without mock login buttons', () => {
     render(<AdminLoginCard onLoginSuccess={vi.fn()} />);
 
     expect(screen.getByText(/Weebles Studio Manager/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Login as Shawn/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Login as Cierra/i })).toBeInTheDocument();
-    expect(screen.queryByText(/lucasshawn@gmail.com/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/lucascierra24@gmail.com/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Login as Shawn/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Login as Cierra/i })).not.toBeInTheDocument();
     expect(screen.getByText(/Return to Storefront/i)).toBeInTheDocument();
   });
 
-  it('authenticates successfully via dev bypass login for Shawn', async () => {
-    const handleSuccess = vi.fn();
-    vi.spyOn(adminAuth, 'devLogin').mockResolvedValue({
-      token: 'shawn-token',
-      email: 'lucasshawn@gmail.com',
-      name: 'Shawn',
-    });
-
-    render(<AdminLoginCard onLoginSuccess={handleSuccess} />);
-
-    const shawnBtn = screen.getByRole('button', { name: /Login as Shawn/i });
-    fireEvent.click(shawnBtn);
-
-    await waitFor(() => {
-      expect(handleSuccess).toHaveBeenCalledWith(
-        expect.objectContaining({ email: 'lucasshawn@gmail.com' })
-      );
-    });
-  });
-
-  it('authenticates successfully via dev bypass login for Cierra', async () => {
-    const handleSuccess = vi.fn();
-    vi.spyOn(adminAuth, 'devLogin').mockResolvedValue({
-      token: 'cierra-token',
-      email: 'lucascierra24@gmail.com',
-      name: 'Cierra',
-    });
-
-    render(<AdminLoginCard onLoginSuccess={handleSuccess} />);
-
-    const cierraBtn = screen.getByRole('button', { name: /Login as Cierra/i });
-    fireEvent.click(cierraBtn);
-
-    await waitFor(() => {
-      expect(handleSuccess).toHaveBeenCalledWith(
-        expect.objectContaining({ email: 'lucascierra24@gmail.com' })
-      );
-    });
-  });
-
-  it('displays error message banner when dev login fails', async () => {
-    vi.spyOn(adminAuth, 'devLogin').mockRejectedValue(new Error('Unauthorized email'));
-
+  it('shows missing Google client ID notice when VITE_GOOGLE_CLIENT_ID is not configured', () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', '');
     render(<AdminLoginCard onLoginSuccess={vi.fn()} />);
 
-    const shawnBtn = screen.getByRole('button', { name: /Login as Shawn/i });
-    fireEvent.click(shawnBtn);
-
-    await waitFor(() => {
-      expect(screen.getByText('Unauthorized email')).toBeInTheDocument();
-    });
+    expect(screen.getByText(/Google OAuth Client ID is not configured/i)).toBeInTheDocument();
   });
 
-  it('initializes Google SSO and handles successful callback', async () => {
-    const handleSuccess = vi.fn();
-    vi.spyOn(adminAuth, 'loginWithCredential').mockResolvedValue({
-      token: 'google-token',
-      email: 'lucasshawn@gmail.com',
-      name: 'Shawn',
-    });
+  it('initializes Google SSO when VITE_GOOGLE_CLIENT_ID is set', () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client-id.apps.googleusercontent.com');
 
-    // Mock import.meta.env.VITE_GOOGLE_CLIENT_ID
-    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-google-client-id');
+    const initializeMock = vi.fn();
+    const renderButtonMock = vi.fn();
 
-    let capturedCallback: ((response: any) => Promise<void>) | null = null;
     (window as any).google = {
       accounts: {
         id: {
-          initialize: vi.fn().mockImplementation((config: any) => {
-            capturedCallback = config.callback;
-          }),
-          renderButton: vi.fn(),
-        },
-      },
-    };
-
-    render(<AdminLoginCard onLoginSuccess={handleSuccess} />);
-
-    expect((window as any).google.accounts.id.initialize).toHaveBeenCalledWith(
-      expect.objectContaining({ client_id: 'test-google-client-id' })
-    );
-    expect((window as any).google.accounts.id.renderButton).toHaveBeenCalled();
-
-    // Trigger Google callback
-    expect(capturedCallback).not.toBeNull();
-    await act(async () => {
-      await capturedCallback!({ credential: 'fake-jwt-token' });
-    });
-
-    expect(adminAuth.loginWithCredential).toHaveBeenCalledWith('fake-jwt-token');
-    expect(handleSuccess).toHaveBeenCalledWith(
-      expect.objectContaining({ email: 'lucasshawn@gmail.com' })
-    );
-  });
-
-  it('displays error when Google SSO callback fails', async () => {
-    vi.spyOn(adminAuth, 'loginWithCredential').mockRejectedValue(new Error('Access denied by server'));
-
-    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-google-client-id');
-
-    let capturedCallback: ((response: any) => Promise<void>) | null = null;
-    (window as any).google = {
-      accounts: {
-        id: {
-          initialize: vi.fn().mockImplementation((config: any) => {
-            capturedCallback = config.callback;
-          }),
-          renderButton: vi.fn(),
+          initialize: initializeMock,
+          renderButton: renderButtonMock,
         },
       },
     };
 
     render(<AdminLoginCard onLoginSuccess={vi.fn()} />);
 
+    expect(initializeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        client_id: 'test-client-id.apps.googleusercontent.com',
+      })
+    );
+    expect(renderButtonMock).toHaveBeenCalled();
+  });
+
+  it('handles successful Google sign-in callback', async () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client-id.apps.googleusercontent.com');
+
+    let googleCallback: (resp: any) => Promise<void> = async () => {};
+    (window as any).google = {
+      accounts: {
+        id: {
+          initialize: vi.fn(({ callback }) => {
+            googleCallback = callback;
+          }),
+          renderButton: vi.fn(),
+        },
+      },
+    };
+
+    const mockSession = {
+      token: 'jwt-token',
+      email: 'lucasshawn@gmail.com',
+      name: 'Shawn',
+    };
+    vi.spyOn(adminAuth, 'loginWithCredential').mockResolvedValue(mockSession);
+    const onLoginSuccess = vi.fn();
+
+    render(<AdminLoginCard onLoginSuccess={onLoginSuccess} />);
+
     await act(async () => {
-      await capturedCallback!({ credential: 'fake-jwt-token' });
+      await googleCallback({ credential: 'valid-google-jwt' });
+    });
+
+    expect(onLoginSuccess).toHaveBeenCalledWith(mockSession);
+  });
+
+  it('displays error banner when Google sign-in is rejected', async () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client-id.apps.googleusercontent.com');
+
+    let googleCallback: (resp: any) => Promise<void> = async () => {};
+    (window as any).google = {
+      accounts: {
+        id: {
+          initialize: vi.fn(({ callback }) => {
+            googleCallback = callback;
+          }),
+          renderButton: vi.fn(),
+        },
+      },
+    };
+
+    vi.spyOn(adminAuth, 'loginWithCredential').mockRejectedValue(
+      new Error('Unauthorized: stranger@gmail.com is not an authorized administrator.')
+    );
+
+    render(<AdminLoginCard onLoginSuccess={vi.fn()} />);
+
+    await act(async () => {
+      await googleCallback({ credential: 'unauthorized-jwt' });
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Access denied by server')).toBeInTheDocument();
+      expect(
+        screen.getByText(/stranger@gmail.com is not an authorized administrator/i)
+      ).toBeInTheDocument();
     });
   });
 });

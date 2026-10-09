@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Lock, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Lock, ArrowLeft, AlertCircle, AlertTriangle } from 'lucide-react';
 import { adminAuth, AdminSession } from '../../services/adminAuth';
 
 interface AdminLoginCardProps {
@@ -10,52 +10,60 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({ onLoginSuccess }
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    // Mount Google Identity Services if client ID is configured
-    const clientId =
-      (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ||
-      (typeof process !== 'undefined' ? (process as any).env?.VITE_GOOGLE_CLIENT_ID : undefined);
-    if (clientId && (window as any).google?.accounts?.id) {
-      try {
-        (window as any).google.accounts.id.initialize({
-          client_id: clientId,
-          callback: async (response: any) => {
-            if (response.credential) {
-              setIsLoading(true);
-              setErrorMessage('');
-              try {
-                const session = await adminAuth.loginWithCredential(response.credential);
-                onLoginSuccess(session);
-              } catch (err: any) {
-                setErrorMessage(err.message || 'Access denied');
-              } finally {
-                setIsLoading(false);
-              }
-            }
-          },
-        });
-        (window as any).google.accounts.id.renderButton(
-          document.getElementById('googleSignInBtn'),
-          { theme: 'outline', size: 'large', shape: 'pill', text: 'signin_with' }
-        );
-      } catch (err) {
-        console.error('Google SSO init error', err);
-      }
-    }
-  }, [onLoginSuccess]);
+  const clientId =
+    (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ||
+    (typeof process !== 'undefined' ? (process as any).env?.VITE_GOOGLE_CLIENT_ID : undefined);
 
-  const handleDevLogin = async (email: string) => {
-    setIsLoading(true);
-    setErrorMessage('');
-    try {
-      const session = await adminAuth.devLogin(email);
-      onLoginSuccess(session);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Login failed');
-    } finally {
-      setIsLoading(false);
+  useEffect(() => {
+    if (!clientId) return;
+
+    const setupGoogleBtn = () => {
+      if ((window as any).google?.accounts?.id) {
+        try {
+          (window as any).google.accounts.id.initialize({
+            client_id: clientId,
+            callback: async (response: any) => {
+              if (response.credential) {
+                setIsLoading(true);
+                setErrorMessage('');
+                try {
+                  const session = await adminAuth.loginWithCredential(response.credential);
+                  onLoginSuccess(session);
+                } catch (err: any) {
+                  setErrorMessage(err.message || 'Access denied');
+                } finally {
+                  setIsLoading(false);
+                }
+              }
+            },
+          });
+          const btnContainer = document.getElementById('googleSignInBtn');
+          if (btnContainer) {
+            btnContainer.innerHTML = '';
+            (window as any).google.accounts.id.renderButton(btnContainer, {
+              theme: 'outline',
+              size: 'large',
+              shape: 'pill',
+              text: 'signin_with',
+            });
+          }
+          return true;
+        } catch (err) {
+          console.error('Google SSO init error', err);
+        }
+      }
+      return false;
+    };
+
+    if (!setupGoogleBtn()) {
+      const interval = setInterval(() => {
+        if (setupGoogleBtn()) {
+          clearInterval(interval);
+        }
+      }, 250);
+      return () => clearInterval(interval);
     }
-  };
+  }, [clientId, onLoginSuccess]);
 
   return (
     <div className="min-h-screen bg-weeble-pinkBg flex items-center justify-center p-4">
@@ -72,7 +80,7 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({ onLoginSuccess }
           Weebles Studio Manager
         </h1>
         <p className="text-xs text-weeble-textMuted mb-6">
-          Sign in to manage inventory, catalog prices, and store settings.
+          Sign in with an authorized Google account to manage inventory, catalog prices, and store settings.
         </p>
 
         {errorMessage && (
@@ -82,33 +90,25 @@ export const AdminLoginCard: React.FC<AdminLoginCardProps> = ({ onLoginSuccess }
           </div>
         )}
 
-        {/* Studio 1-Click Login Buttons */}
-        <div className="bg-weeble-pinkWash p-4 rounded-2xl border border-pink-100 mb-6">
-          <span className="text-xs font-bold text-weeble-text block mb-3">
-            Choose Studio Profile:
-          </span>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              disabled={isLoading}
-              onClick={() => handleDevLogin('lucasshawn@gmail.com')}
-              className="bg-white hover:bg-pink-50 text-weeble-text border-2 border-pink-200 hover:border-weeble-pink text-xs font-bold py-2.5 px-3 rounded-2xl transition-all shadow-xs hover:shadow-pillow hover:scale-102 flex items-center justify-center gap-1.5"
-            >
-              <span>Login as Shawn</span>
-              <span>🍓</span>
-            </button>
-            <button
-              disabled={isLoading}
-              onClick={() => handleDevLogin('lucascierra24@gmail.com')}
-              className="bg-white hover:bg-pink-50 text-weeble-text border-2 border-pink-200 hover:border-weeble-pink text-xs font-bold py-2.5 px-3 rounded-2xl transition-all shadow-xs hover:shadow-pillow hover:scale-102 flex items-center justify-center gap-1.5"
-            >
-              <span>Login as Cierra</span>
-              <span>🎀</span>
-            </button>
+        {isLoading && (
+          <div className="text-xs font-bold text-weeble-pink mb-4 animate-pulse">
+            Signing in...
           </div>
-        </div>
+        )}
 
-        {/* Google SSO Container (active if VITE_GOOGLE_CLIENT_ID is set) */}
-        <div className="flex justify-center mb-6" id="googleSignInBtn" />
+        {!clientId ? (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-2xl p-4 mb-6 flex items-start gap-2.5 text-left">
+            <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+            <div>
+              <div className="font-bold text-amber-900 mb-1">Google OAuth Client ID Missing</div>
+              <p className="text-amber-700 leading-relaxed">
+                Google OAuth Client ID is not configured. Please set <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-[11px]">VITE_GOOGLE_CLIENT_ID</code> in your environment variables to enable admin login.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-center mb-6 min-h-[44px]" id="googleSignInBtn" />
+        )}
 
         <a
           href="/"
