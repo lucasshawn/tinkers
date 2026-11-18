@@ -14,6 +14,7 @@ export interface Product {
   stockCount: number;
   featured?: boolean;
   isOneOfAKind?: boolean;
+  createdAt?: string;
 }
 
 export interface CartItem {

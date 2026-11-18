@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterProducts, formatPrice } from '../src/utils/productUtils';
+import { filterProducts, formatPrice, isNewProduct, NEW_PRODUCT_WINDOW_MS } from '../src/utils/productUtils';
 import { Product } from '../src/types';
 
 const mockProducts: Product[] = [
@@ -91,5 +91,43 @@ describe('productUtils', () => {
   it('returns all products when category is all and searchQuery is empty', () => {
     const results = filterProducts(mockProducts, 'all', '  ');
     expect(results.length).toBe(3);
+  });
+
+  describe('isNewProduct', () => {
+    const baseProduct: Product = mockProducts[0];
+    const fixedNow = Date.parse('2026-11-18T12:00:00.000Z');
+
+    it('returns false when createdAt is undefined', () => {
+      expect(isNewProduct(baseProduct, fixedNow)).toBe(false);
+    });
+
+    it('returns false when createdAt is an invalid date string', () => {
+      expect(isNewProduct({ ...baseProduct, createdAt: 'not-a-date' }, fixedNow)).toBe(false);
+    });
+
+    it('returns true when product was just created', () => {
+      const createdAt = new Date(fixedNow).toISOString();
+      expect(isNewProduct({ ...baseProduct, createdAt }, fixedNow)).toBe(true);
+    });
+
+    it('returns true when product is within 30 days (e.g. 29 days old)', () => {
+      const createdAt = new Date(fixedNow - 29 * 24 * 60 * 60 * 1000).toISOString();
+      expect(isNewProduct({ ...baseProduct, createdAt }, fixedNow)).toBe(true);
+    });
+
+    it('returns true at the exact 30-day boundary', () => {
+      const createdAt = new Date(fixedNow - NEW_PRODUCT_WINDOW_MS).toISOString();
+      expect(isNewProduct({ ...baseProduct, createdAt }, fixedNow)).toBe(true);
+    });
+
+    it('returns false when product is older than 30 days', () => {
+      const createdAt = new Date(fixedNow - NEW_PRODUCT_WINDOW_MS - 1).toISOString();
+      expect(isNewProduct({ ...baseProduct, createdAt }, fixedNow)).toBe(false);
+    });
+
+    it('returns false when createdAt is in the future', () => {
+      const createdAt = new Date(fixedNow + 60_000).toISOString();
+      expect(isNewProduct({ ...baseProduct, createdAt }, fixedNow)).toBe(false);
+    });
   });
 });

@@ -191,9 +191,9 @@ In `src/components/admin/WeebleEditorModal.tsx`, update `savedProduct` inside `h
       images: [finalImagePath || '/images/products/placeholder.jpg'],
       category,
       availableVariants: variants.length > 0 ? variants : ['magnet'],
-      inStock,
-      stockCount: isOneOfAKind ? 1 : Math.max(0, stockCount),
-      isOneOfAKind,
+      inStock: finalInStock,
+      stockCount: finalStockCount,
+      isOneOfAKind: finalIsOneOfAKind,
       featured,
       ...(createdAt ? { createdAt } : {}),
     };

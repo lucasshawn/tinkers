@@ -163,6 +163,44 @@ describe('ProductCard', () => {
     expect(disabledBtn).toBeDisabled();
     vi.useRealTimers();
   });
+
+  it('renders NEW! badge when product was added within the last 30 days', () => {
+    const recentProduct: Product = {
+      ...mockProduct,
+      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+
+    render(
+      <CartProvider>
+        <ProductCard product={recentProduct} />
+      </CartProvider>
+    );
+
+    expect(screen.getByText('NEW!')).toBeInTheDocument();
+  });
+
+  it('does not render NEW! badge when product is older than 30 days or has no createdAt', () => {
+    const expiredProduct: Product = {
+      ...mockProduct,
+      createdAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+
+    const { rerender } = render(
+      <CartProvider>
+        <ProductCard product={expiredProduct} />
+      </CartProvider>
+    );
+
+    expect(screen.queryByText('NEW!')).not.toBeInTheDocument();
+
+    rerender(
+      <CartProvider>
+        <ProductCard product={mockProduct} />
+      </CartProvider>
+    );
+
+    expect(screen.queryByText('NEW!')).not.toBeInTheDocument();
+  });
 });
 
 describe('CatalogGrid', () => {

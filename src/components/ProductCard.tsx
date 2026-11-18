@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Product, VariantType } from '../types';
 import { useCart } from '../context/CartContext';
-import { formatPrice } from '../utils/productUtils';
+import { formatPrice, isNewProduct } from '../utils/productUtils';
 import { Sparkles, Check } from 'lucide-react';
 
 interface ProductCardProps {
@@ -61,6 +61,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </span>
           )}
         </div>
+
+        {/* New Item Badge */}
+        {isNewProduct(product) && (
+          <div className="absolute top-2.5 right-2.5">
+            <span className="bg-weeble-pink text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm">
+              NEW!
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Info Section */}
