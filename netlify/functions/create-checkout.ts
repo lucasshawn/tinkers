@@ -5,7 +5,7 @@ import { loadPersistedProducts } from './admin-save';
 export const getStripe = (): Stripe | null => {
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
   return stripeSecretKey
-    ? new Stripe(stripeSecretKey, { apiVersion: '2024-12-18.acacia' as any })
+    ? new Stripe(stripeSecretKey, { apiVersion: '2026-03-25.dahlia' as any })
     : null;
 };
 
@@ -91,23 +91,28 @@ export const handler: Handler = async (event) => {
     });
 
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items,
+      ui_mode: 'form',
       mode: 'payment',
-      shipping_address_collection: {
-        allowed_countries: ['US', 'CA'],
+      billing_address_collection: 'auto',
+      phone_number_collection: {
+        enabled: false,
       },
+      automatic_tax: {
+        enabled: false,
+      },
+      submit_type: 'auto',
+      integration_identifier: 'custom_embedded_web_0001',
+      line_items,
       metadata: {
         giftNote: giftNote || '',
       },
-      success_url: `${origin}/order-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/`,
+      return_url: `${origin}/order-success?session_id={CHECKOUT_SESSION_ID}`,
     });
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: session.url }),
+      body: JSON.stringify({ client_secret: session.client_secret }),
     };
   } catch (error: any) {
     console.error('Stripe session error:', error);

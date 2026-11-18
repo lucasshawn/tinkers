@@ -117,7 +117,7 @@ describe('App smoke test', () => {
 
   it('triggers checkout in App sending items from CartContext', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ url: 'https://checkout.stripe.com/pay/test' }), {
+      new Response(JSON.stringify({ client_secret: 'cs_test_secret_123' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -148,6 +148,7 @@ describe('App smoke test', () => {
       fireEvent.click(checkoutBtn);
     });
 
+    expect(screen.getByRole('dialog', { name: /Stripe Checkout/i })).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenCalledWith(
       '/.netlify/functions/create-checkout',
       expect.objectContaining({

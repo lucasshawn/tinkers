@@ -1,9 +1,31 @@
 import { CartItem } from '../types';
 
+export interface CheckoutSessionResponse {
+  client_secret?: string;
+  url?: string;
+}
+
+export const STRIPE_APPEARANCE = {
+  theme: 'stripe',
+  labels: 'auto',
+  inputs: 'spaced',
+  variables: {
+    borderRadius: '4px',
+    colorBackground: '#ffffff',
+    colorDanger: '#df1b41',
+    colorPrimary: '#0570de',
+    colorSuccess: '#00c853',
+    colorText: '#30313d',
+    fontFamily: 'default',
+    fontSizeBase: '16px',
+    spacingUnit: '4px',
+  },
+};
+
 export async function createCheckoutSession(
   items: CartItem[],
   giftNote?: string
-): Promise<{ url: string }> {
+): Promise<CheckoutSessionResponse> {
   const response = await fetch('/.netlify/functions/create-checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

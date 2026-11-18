@@ -45,7 +45,7 @@ describe('stripeService client', () => {
   });
 
   it('posts cart items to create-checkout netlify function', async () => {
-    const mockResponse = { url: 'https://checkout.stripe.com/pay/cs_test_123' };
+    const mockResponse = { client_secret: 'cs_test_secret_123' };
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => mockResponse,
@@ -57,11 +57,11 @@ describe('stripeService client', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: mockCart, giftNote: 'Pack cute please' }),
     });
-    expect(result.url).toBe(mockResponse.url);
+    expect(result.client_secret).toBe(mockResponse.client_secret);
   });
 
   it('works when giftNote is omitted', async () => {
-    const mockResponse = { url: 'https://checkout.stripe.com/pay/cs_test_123' };
+    const mockResponse = { client_secret: 'cs_test_secret_123' };
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => mockResponse,
@@ -73,7 +73,7 @@ describe('stripeService client', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: mockCart, giftNote: undefined }),
     });
-    expect(result.url).toBe(mockResponse.url);
+    expect(result.client_secret).toBe(mockResponse.client_secret);
   });
 
   it('throws error with message when server response is not ok', async () => {
@@ -167,8 +167,9 @@ describe('create-checkout Netlify Function handler', () => {
 
   it('creates Stripe checkout session when STRIPE_SECRET_KEY is set', async () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_fake_key_123';
+    mockCreateSession.mockClear();
     mockCreateSession.mockResolvedValue({
-      url: 'https://checkout.stripe.com/pay/cs_test_mock',
+      client_secret: 'cs_test_secret_mock',
     });
 
     const response = (await handler(
@@ -181,22 +182,33 @@ describe('create-checkout Netlify Function handler', () => {
       () => {}
     )) as any;
 
-    expect(mockCreateSession).toHaveBeenCalledWith(
+    const createCallArg = mockCreateSession.mock.calls[0][0];
+    expect(createCallArg).toEqual(
       expect.objectContaining({
-        payment_method_types: ['card'],
+        ui_mode: 'form',
         mode: 'payment',
-        shipping_address_collection: {
-          allowed_countries: ['US', 'CA'],
+        billing_address_collection: 'auto',
+        phone_number_collection: {
+          enabled: false,
         },
+        automatic_tax: {
+          enabled: false,
+        },
+        submit_type: 'auto',
+        integration_identifier: 'custom_embedded_web_0001',
         metadata: {
           giftNote: 'Wrap in pink ribbon',
         },
-        success_url: 'https://weebles.store/order-success?session_id={CHECKOUT_SESSION_ID}',
-        cancel_url: 'https://weebles.store/',
+        return_url: 'https://weebles.store/order-success?session_id={CHECKOUT_SESSION_ID}',
       })
     );
+    expect(createCallArg.payment_method_collection).toBeUndefined();
+    expect(createCallArg.payment_method_types).toBeUndefined();
+    expect(createCallArg.shipping_address_collection).toBeUndefined();
+    expect(createCallArg.success_url).toBeUndefined();
+    expect(createCallArg.cancel_url).toBeUndefined();
 
-    const lineItems = mockCreateSession.mock.calls[0][0].line_items;
+    const lineItems = createCallArg.line_items;
     expect(lineItems).toHaveLength(2);
     expect(lineItems[0].price_data.product_data.name).toContain('Strawberry Bunny');
     expect(lineItems[0].price_data.product_data.name).toContain('🧲 Refrigerator Magnet');
@@ -209,14 +221,14 @@ describe('create-checkout Netlify Function handler', () => {
     expect(lineItems[1].quantity).toBe(1);
 
     expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.body).url).toBe('https://checkout.stripe.com/pay/cs_test_mock');
+    expect(JSON.parse(response.body)).toEqual({ client_secret: 'cs_test_secret_mock' });
   });
 
   it('uses authoritative variant-specific price from variantPrices and supports items without variants', async () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_fake_key_123';
     mockCreateSession.mockClear();
     mockCreateSession.mockResolvedValue({
-      url: 'https://checkout.stripe.com/pay/cs_test_mock',
+      client_secret: 'cs_test_secret_mock',
     });
 
     vi.spyOn(adminSave, 'loadPersistedProducts').mockResolvedValue([
@@ -318,7 +330,7 @@ describe('create-checkout Netlify Function handler', () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_fake_key_123';
     mockCreateSession.mockClear();
     mockCreateSession.mockResolvedValue({
-      url: 'https://checkout.stripe.com/pay/cs_test_mock',
+      client_secret: 'cs_test_secret_mock',
     });
 
     const manipulatedCart = [

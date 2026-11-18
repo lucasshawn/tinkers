@@ -4,6 +4,7 @@ import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
 import { CatalogGrid } from './components/CatalogGrid';
 import { CartDrawer } from './components/CartDrawer';
+import { CheckoutModal } from './components/CheckoutModal';
 import { CustomOrderModal } from './components/CustomOrderModal';
 import { SocialStrip } from './components/SocialStrip';
 import { Footer } from './components/Footer';
@@ -18,10 +19,11 @@ import { getStoredProducts, saveStoredProducts, PRODUCTS_STORAGE_KEY } from './u
 import { adminApi } from './services/adminApi';
 
 export const AppContent: React.FC = () => {
-  const { items } = useCart();
+  const { items, setIsCartOpen } = useCart();
   const { settings } = useSettings();
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
+  const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
 
   // Defensively normalize productsData and hydrate from persisted admin updates
   const [products, setProducts] = useState<Product[]>(() => {
@@ -59,7 +61,14 @@ export const AppContent: React.FC = () => {
     setIsLoadingCheckout(true);
     try {
       const session = await createCheckoutSession(items, giftNote);
-      window.location.href = session.url;
+      if (session.client_secret) {
+        setIsCartOpen(false);
+        setCheckoutClientSecret(session.client_secret);
+      } else if (session.url) {
+        window.location.href = session.url;
+      } else {
+        throw new Error('Checkout session response missing client_secret');
+      }
     } catch (err: any) {
       alert(`Checkout error: ${err.message || 'Please try again.'}`);
     } finally {
@@ -96,6 +105,11 @@ export const AppContent: React.FC = () => {
       <CartDrawer
         onCheckout={handleCheckout}
         isLoadingCheckout={isLoadingCheckout}
+      />
+
+      <CheckoutModal
+        clientSecret={checkoutClientSecret}
+        onClose={() => setCheckoutClientSecret(null)}
       />
 
       <CustomOrderModal
