@@ -13,10 +13,10 @@ describe('admin-auth Netlify Function', () => {
     vi.restoreAllMocks();
   });
 
-  it('exports the authorized admin whitelist containing Shawn, Cierra, and powerhousepnw', () => {
+  it('exports the authorized admin whitelist containing Shawn and Cierra', () => {
     expect(ALLOWED_ADMINS).toContain('lucasshawn@gmail.com');
     expect(ALLOWED_ADMINS).toContain('lucascierra24@gmail.com');
-    expect(ALLOWED_ADMINS).toContain('powerhousepnw@gmail.com');
+    expect(ALLOWED_ADMINS).not.toContain('powerhousepnw@gmail.com');
     expect(createSessionToken).toBeDefined();
   });
 
@@ -41,7 +41,26 @@ describe('admin-auth Netlify Function', () => {
     expect(data.name).toBe('Shawn Lucas');
   });
 
-  it('authorizes valid Google token for powerhousepnw@gmail.com', async () => {
+  it('authorizes valid Google token for lucascierra24@gmail.com', async () => {
+    const cred = makeJwt({
+      email: 'lucascierra24@gmail.com',
+      name: 'Cierra Lucas',
+      picture: 'https://example.com/cierra.jpg',
+      email_verified: true,
+    });
+
+    const event = {
+      httpMethod: 'POST',
+      body: JSON.stringify({ credential: cred }),
+    };
+
+    const res = await handler(event as any, {} as any) as any;
+    expect(res.statusCode).toBe(200);
+    const data = JSON.parse(res.body);
+    expect(data.email).toBe('lucascierra24@gmail.com');
+  });
+
+  it('rejects unauthorized Google email like powerhousepnw@gmail.com with 403 Forbidden', async () => {
     const cred = makeJwt({
       email: 'powerhousepnw@gmail.com',
       name: 'Powerhouse Admin',
@@ -55,9 +74,9 @@ describe('admin-auth Netlify Function', () => {
     };
 
     const res = await handler(event as any, {} as any) as any;
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(403);
     const data = JSON.parse(res.body);
-    expect(data.email).toBe('powerhousepnw@gmail.com');
+    expect(data.error).toMatch(/unauthorized: powerhousepnw@gmail\.com is not an authorized administrator/i);
   });
 
   it('rejects unauthorized Google email with 403 Forbidden', async () => {

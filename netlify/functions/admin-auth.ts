@@ -1,17 +1,30 @@
 import { Handler } from '@netlify/functions';
 import crypto from 'crypto';
+import defaultSettingsData from '../../src/data/settings.json';
 
 export const DEFAULT_ALLOWED_ADMINS = [
   'lucasshawn@gmail.com',
   'lucascierra24@gmail.com',
-  'powerhousepnw@gmail.com',
 ];
 
 export const getAllowedAdmins = (): string[] => {
+  let settingsAdmins: string[] = [];
+  try {
+    if (Array.isArray((defaultSettingsData as any)?.admins)) {
+      settingsAdmins = (defaultSettingsData as any).admins;
+    }
+  } catch {}
+
   const envAdmins = process.env.ALLOWED_ADMIN_EMAILS
     ? process.env.ALLOWED_ADMIN_EMAILS.split(',').map((e) => e.toLowerCase().trim()).filter(Boolean)
     : [];
-  return Array.from(new Set([...DEFAULT_ALLOWED_ADMINS, ...envAdmins]));
+  return Array.from(
+    new Set(
+      [...DEFAULT_ALLOWED_ADMINS, ...settingsAdmins, ...envAdmins]
+        .map((e) => e.toLowerCase().trim())
+        .filter(Boolean)
+    )
+  );
 };
 
 export const ALLOWED_ADMINS = getAllowedAdmins();
