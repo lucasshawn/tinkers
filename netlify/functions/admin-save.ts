@@ -34,6 +34,20 @@ function getBlobsContext(event: any): BlobsContext | null {
         };
       }
     }
+    const envCtx = process.env.NETLIFY_BLOBS_CONTEXT;
+    if (envCtx) {
+      const decoded = Buffer.from(envCtx, 'base64').toString('utf-8');
+      const data = JSON.parse(decoded);
+      const edgeURL = data.edgeURL || data.url;
+      const siteID = data.siteID || event?.headers?.['x-nf-site-id'];
+      if (edgeURL && data.token && siteID) {
+        return {
+          edgeURL,
+          siteID,
+          token: data.token,
+        };
+      }
+    }
   } catch {}
   return null;
 }
@@ -247,14 +261,18 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    const { type, products, settings, admins, newImage } = JSON.parse(event.body || '{}');
+    const rawBody =
+      event.isBase64Encoded && event.body
+        ? Buffer.from(event.body, 'base64').toString('utf-8')
+        : event.body || '{}';
+    const { type, products, settings, admins, newImage } = JSON.parse(rawBody);
     const githubToken = process.env.GITHUB_TOKEN || '';
 
     // 1. Handle image upload if present
     if (newImage && newImage.filename && newImage.base64Data) {
       const cleanFilename = path.basename(newImage.filename).replace(/[^a-zA-Z0-9._-]/g, '');
       const imagePath = `public/images/products/${cleanFilename}`;
-      const rawBase64 = newImage.base64Data.replace(/^data:image\/\w+;base64,/, '');
+      const rawBase64 = newImage.base64Data.replace(/^data:image\/[\w+.-]+;base64,/, '');
 
       if (githubToken) {
         await commitToGitHub(imagePath, rawBase64, `chore(admin): upload product image ${cleanFilename}`);

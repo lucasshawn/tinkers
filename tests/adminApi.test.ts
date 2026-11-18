@@ -515,6 +515,36 @@ describe('admin-save Netlify Function', () => {
     expect(Array.isArray(body.products)).toBe(true);
     expect(body.settings).toBeDefined();
   });
+
+  it('decodes base64-encoded event.body when event.isBase64Encoded is true', async () => {
+    const payload = JSON.stringify({
+      type: 'inventory',
+      products: [
+        {
+          id: 'weeble-b64',
+          name: 'Base64 Bunny',
+          description: 'Encoded payload test',
+          price: 15,
+          images: ['/images/products/bunny.jpg'],
+          category: 'animals',
+          availableVariants: ['magnet'],
+          inStock: true,
+          stockCount: 3,
+        },
+      ],
+    });
+
+    const event = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      isBase64Encoded: true,
+      body: Buffer.from(payload, 'utf-8').toString('base64'),
+    };
+
+    const res = await handler(event as any, {} as any) as any;
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).success).toBe(true);
+  });
 });
 
 describe('adminApi client service', () => {

@@ -38,7 +38,8 @@ export const adminApi = {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || 'Failed to save inventory');
+      const statusDetail = res.status ? ` (HTTP ${res.status})` : '';
+      throw new Error(data.error || `Failed to save inventory${statusDetail}`);
     }
 
     return res.json();
@@ -62,7 +63,8 @@ export const adminApi = {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || 'Failed to save settings');
+      const statusDetail = res.status ? ` (HTTP ${res.status})` : '';
+      throw new Error(data.error || `Failed to save settings${statusDetail}`);
     }
 
     return res.json();
@@ -86,7 +88,8 @@ export const adminApi = {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || 'Failed to save admin whitelist');
+      const statusDetail = res.status ? ` (HTTP ${res.status})` : '';
+      throw new Error(data.error || `Failed to save admin whitelist${statusDetail}`);
     }
 
     return res.json();

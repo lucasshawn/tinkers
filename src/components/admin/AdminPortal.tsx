@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, ArrowLeft, Layers, Users, CreditCard, Palette } from 'lucide-react';
+import { LogOut, ArrowLeft, Layers, Users, CreditCard, Palette, AlertCircle, X, CheckCircle2 } from 'lucide-react';
 import { adminAuth, AdminSession } from '../../services/adminAuth';
 import { adminApi } from '../../services/adminApi';
 import { AdminLoginCard } from './AdminLoginCard';
@@ -52,44 +52,55 @@ export const AdminPortal: React.FC = () => {
     newImage?: { filename: string; base64Data: string }
   ) => {
     setErrorMessage(null);
+
+    // If a new image was uploaded, embed its data URL into the local catalog so it renders immediately
+    // even before a static site rebuild finishes.
+    const localUpdated =
+      newImage && newImage.filename && newImage.base64Data
+        ? updated.map((p) =>
+            p.images[0] === `/images/products/${newImage.filename}`
+              ? { ...p, images: [newImage.base64Data] }
+              : p
+          )
+        : updated;
+
+    // Optimistically update catalog and localStorage immediately so new/edited items appear right away
+    setProducts(localUpdated);
+    saveStoredProducts(localUpdated);
+
     try {
       const res = await adminApi.saveInventory(updated, newImage);
-      setProducts(updated);
-      saveStoredProducts(updated);
       setNotification(res.message);
-      setTimeout(() => setNotification(null), 4000);
+      setTimeout(() => setNotification(null), 5000);
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to save inventory');
-      setTimeout(() => setErrorMessage(null), 5000);
     }
   };
 
   const handleSaveSettings = async (newSettings: SiteSettings) => {
     setErrorMessage(null);
+    updateSettings(newSettings);
     try {
       const res = await adminApi.saveSettings(newSettings);
-      updateSettings(newSettings);
       setNotification(res.message);
-      setTimeout(() => setNotification(null), 4000);
+      setTimeout(() => setNotification(null), 5000);
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to save settings');
-      setTimeout(() => setErrorMessage(null), 5000);
     }
   };
 
   const handleSaveAdmins = async (updatedAdmins: string[]) => {
     setErrorMessage(null);
+    updateSettings({
+      ...settings,
+      admins: updatedAdmins,
+    });
     try {
       const res = await adminApi.saveAdmins(updatedAdmins);
-      updateSettings({
-        ...settings,
-        admins: updatedAdmins,
-      });
       setNotification(res.message);
-      setTimeout(() => setNotification(null), 4000);
+      setTimeout(() => setNotification(null), 5000);
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to save admin whitelist');
-      setTimeout(() => setErrorMessage(null), 5000);
     }
   };
 
@@ -134,14 +145,39 @@ export const AdminPortal: React.FC = () => {
       {/* Main Body */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
         {notification && (
-          <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-4 py-3 rounded-2xl shadow-xs">
-            {notification}
+          <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-4 py-3 rounded-2xl shadow-xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{notification}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNotification(null)}
+              aria-label="Dismiss notification"
+              className="text-emerald-700 hover:text-emerald-900 p-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 
         {errorMessage && (
-          <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold px-4 py-3 rounded-2xl shadow-xs">
-            {errorMessage}
+          <div
+            role="alert"
+            className="mb-6 bg-rose-50 border-2 border-rose-300 text-rose-800 text-xs font-bold px-4 py-3.5 rounded-2xl shadow-sm flex items-center justify-between gap-3 sticky top-20 z-30"
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setErrorMessage(null)}
+              aria-label="Dismiss error"
+              className="text-rose-600 hover:text-rose-900 p-1 rounded-lg hover:bg-rose-100 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 

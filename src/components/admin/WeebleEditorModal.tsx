@@ -67,8 +67,45 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result as string;
+      // Immediately set raw data URL so preview and synchronous tests work right away
       setUploadedImage({ filename: cleanFilename, base64Data: base64 });
       setImageUrl(base64);
+
+      // In browser environments with large photos (> 200KB), compress via canvas to avoid
+      // serverless 6MB request limits and localStorage 5MB quota limits.
+      if (base64.length > 200_000 && typeof Image !== 'undefined' && typeof document !== 'undefined') {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const maxDim = 800;
+            let { width, height } = img;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const compressed = canvas.toDataURL('image/jpeg', 0.82);
+              if (compressed && compressed.startsWith('data:image/')) {
+                setUploadedImage({ filename: cleanFilename, base64Data: compressed });
+                setImageUrl(compressed);
+              }
+            }
+          } catch {
+            // Keep original base64 if canvas compression is unavailable
+          }
+        };
+        img.src = base64;
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -120,7 +157,6 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
     const finalInStock = inStock && parsedStock > 0;
     const finalStockCount = finalInStock ? parsedStock : 0;
     const finalIsOneOfAKind = finalStockCount > 1 ? false : isOneOfAKind;
-    const createdAt = product ? product.createdAt : new Date().toISOString();
 
     const savedProduct: Product = {
       id,
@@ -134,7 +170,11 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
       stockCount: finalStockCount,
       isOneOfAKind: finalIsOneOfAKind,
       featured,
-      ...(createdAt ? { createdAt } : {}),
+      ...(product
+        ? product.createdAt
+          ? { createdAt: product.createdAt }
+          : {}
+        : { createdAt: new Date().toISOString() }),
     };
 
     onSave(savedProduct, uploadedImage || undefined);
@@ -196,7 +236,7 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
               <input
                 id="weeble-price"
                 type="number"
-                step="0.50"
+                step="0.01"
                 required
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}

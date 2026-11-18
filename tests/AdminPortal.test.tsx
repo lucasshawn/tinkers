@@ -201,6 +201,39 @@ describe('AdminPortal', () => {
     expect(screen.queryByText('Chubby Bumblebee')).not.toBeInTheDocument();
   });
 
+  it('keeps error message visible until dismissed and preserves local catalog updates if backend save fails', async () => {
+    vi.useFakeTimers();
+    try {
+      adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
+      vi.spyOn(adminApi, 'saveInventory').mockRejectedValue(new Error('Backend Error: Payload Too Large (413)'));
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+      render(
+        <SettingsProvider>
+          <AdminPortal />
+        </SettingsProvider>
+      );
+
+      const deleteBtns = screen.getAllByRole('button', { name: /Delete/i });
+      fireEvent.click(deleteBtns[0]);
+
+      await vi.waitFor(() => {
+        expect(screen.getByText(/Backend Error: Payload Too Large \(413\)/i)).toBeInTheDocument();
+      });
+
+      // Advance 10 seconds - error must NOT auto-disappear
+      vi.advanceTimersByTime(10000);
+      expect(screen.getByText(/Backend Error: Payload Too Large \(413\)/i)).toBeInTheDocument();
+
+      // Dismiss button clears the error
+      const dismissBtn = screen.getByRole('button', { name: /Dismiss error/i });
+      fireEvent.click(dismissBtn);
+      expect(screen.queryByText(/Backend Error: Payload Too Large \(413\)/i)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('allows logging out and returns to login card', () => {
     adminAuth.setSession({ token: 'valid-token', email: 'lucascierra24@gmail.com', name: 'Cierra' });
 
