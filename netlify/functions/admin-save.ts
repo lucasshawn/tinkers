@@ -1,9 +1,157 @@
 import { Handler } from '@netlify/functions';
 import crypto from 'crypto';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { getAllowedAdmins } from './admin-auth';
+import defaultProductsData from '../../src/data/products.json';
 import defaultSettingsData from '../../src/data/settings.json';
+
+const TMP_PRODUCTS_FILE = 'weebles-products.json';
+const TMP_SETTINGS_FILE = 'weebles-settings.json';
+const BLOB_STORE_NAME = 'site:weebles-store';
+
+interface BlobsContext {
+  edgeURL: string;
+  siteID: string;
+  token: string;
+}
+
+function getBlobsContext(event: any): BlobsContext | null {
+  try {
+    if (event?.blobs) {
+      const decoded = Buffer.from(event.blobs, 'base64').toString('utf-8');
+      const data = JSON.parse(decoded);
+      const siteID =
+        event.headers?.['x-nf-site-id'] ||
+        event.headers?.['X-Nf-Site-Id'] ||
+        data.siteID;
+      if (data.url && data.token && siteID) {
+        return {
+          edgeURL: data.url,
+          siteID,
+          token: data.token,
+        };
+      }
+    }
+  } catch {}
+  return null;
+}
+
+async function saveToNetlifyBlobs(event: any, key: string, jsonString: string): Promise<boolean> {
+  const ctx = getBlobsContext(event);
+  if (!ctx) return false;
+  try {
+    const url = new URL(`/${ctx.siteID}/${BLOB_STORE_NAME}/${key}`, ctx.edgeURL).toString();
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        authorization: `Bearer ${ctx.token}`,
+        'content-type': 'application/json',
+        'cache-control': 'max-age=0, stale-while-revalidate=60',
+      },
+      body: jsonString,
+    });
+    return Boolean(res && res.ok);
+  } catch {
+    return false;
+  }
+}
+
+async function readFromNetlifyBlobs<T>(event: any, key: string): Promise<T | null> {
+  const ctx = getBlobsContext(event);
+  if (!ctx) return null;
+  try {
+    const url = new URL(`/${ctx.siteID}/${BLOB_STORE_NAME}/${key}`, ctx.edgeURL).toString();
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        authorization: `Bearer ${ctx.token}`,
+      },
+    });
+    if (res && res.ok) {
+      return (await res.json()) as T;
+    }
+  } catch {}
+  return null;
+}
+
+function writeJsonWithFallback(localRelativePath: string, tmpFilename: string, jsonString: string): 'local' | 'tmp' {
+  const localPath = path.resolve(process.cwd(), localRelativePath);
+  try {
+    fs.writeFileSync(localPath, jsonString);
+    return 'local';
+  } catch {
+    try {
+      const tmpPath = path.join(os.tmpdir(), tmpFilename);
+      fs.writeFileSync(tmpPath, jsonString);
+    } catch {}
+    return 'tmp';
+  }
+}
+
+export async function loadPersistedProducts(event?: any): Promise<any[]> {
+  if (event) {
+    const blobProducts = await readFromNetlifyBlobs<any[]>(event, 'products');
+    if (Array.isArray(blobProducts)) return blobProducts;
+  }
+
+  try {
+    const tmpPath = path.join(os.tmpdir(), TMP_PRODUCTS_FILE);
+    if (fs.existsSync(tmpPath)) {
+      const content = fs.readFileSync(tmpPath, 'utf-8');
+      if (content) {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch {}
+
+  try {
+    const localPath = path.resolve(process.cwd(), 'src/data/products.json');
+    if (fs.existsSync(localPath)) {
+      const content = fs.readFileSync(localPath, 'utf-8');
+      if (content) {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch {}
+
+  const raw = (defaultProductsData as any)?.products || defaultProductsData;
+  return Array.isArray(raw) ? raw : [];
+}
+
+export async function loadPersistedSettings(event?: any): Promise<any> {
+  if (event) {
+    const blobSettings = await readFromNetlifyBlobs<any>(event, 'settings');
+    if (blobSettings && typeof blobSettings === 'object') {
+      return { ...defaultSettingsData, ...blobSettings };
+    }
+  }
+
+  try {
+    const tmpPath = path.join(os.tmpdir(), TMP_SETTINGS_FILE);
+    if (fs.existsSync(tmpPath)) {
+      const content = fs.readFileSync(tmpPath, 'utf-8');
+      if (content) {
+        return { ...defaultSettingsData, ...JSON.parse(content) };
+      }
+    }
+  } catch {}
+
+  try {
+    const localPath = path.resolve(process.cwd(), 'src/data/settings.json');
+    if (fs.existsSync(localPath)) {
+      const content = fs.readFileSync(localPath, 'utf-8');
+      if (content) {
+        return { ...defaultSettingsData, ...JSON.parse(content) };
+      }
+    }
+  } catch {}
+
+  return { ...defaultSettingsData };
+}
 
 function verifyToken(authHeader?: string): string | null {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
@@ -72,6 +220,18 @@ async function commitToGitHub(filePath: string, contentBase64: string, commitMes
 }
 
 export const handler: Handler = async (event) => {
+  if (event.httpMethod === 'GET' && event.queryStringParameters?.action === 'load') {
+    const products = await loadPersistedProducts(event);
+    const settings = await loadPersistedSettings(event);
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ products, settings }),
+    };
+  }
+
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
@@ -100,8 +260,15 @@ export const handler: Handler = async (event) => {
         await commitToGitHub(imagePath, rawBase64, `chore(admin): upload product image ${cleanFilename}`);
       } else {
         const localDir = path.resolve(process.cwd(), 'public/images/products');
-        if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
-        fs.writeFileSync(path.join(localDir, cleanFilename), Buffer.from(rawBase64, 'base64'));
+        try {
+          if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
+          fs.writeFileSync(path.join(localDir, cleanFilename), Buffer.from(rawBase64, 'base64'));
+        } catch {
+          try {
+            const tmpImgPath = path.join(os.tmpdir(), `weebles-img-${cleanFilename}`);
+            fs.writeFileSync(tmpImgPath, Buffer.from(rawBase64, 'base64'));
+          } catch {}
+        }
       }
     }
 
@@ -110,11 +277,12 @@ export const handler: Handler = async (event) => {
       const jsonString = JSON.stringify(products, null, 2) + '\n';
       const base64Content = Buffer.from(jsonString).toString('base64');
 
+      await saveToNetlifyBlobs(event, 'products', jsonString);
+
       if (githubToken) {
         await commitToGitHub('src/data/products.json', base64Content, 'chore(admin): update product inventory from studio portal');
       } else {
-        const localPath = path.resolve(process.cwd(), 'src/data/products.json');
-        fs.writeFileSync(localPath, jsonString);
+        writeJsonWithFallback('src/data/products.json', TMP_PRODUCTS_FILE, jsonString);
       }
 
       return {
@@ -131,19 +299,10 @@ export const handler: Handler = async (event) => {
 
     // 3. Handle settings update
     if (type === 'settings' && settings) {
-      let mergedSettings = { ...settings };
+      const mergedSettings = { ...settings };
       // Preserve existing admins if not explicitly provided in settings update
       if (!mergedSettings.admins) {
-        let currentSettings = { ...defaultSettingsData };
-        const localPath = path.resolve(process.cwd(), 'src/data/settings.json');
-        try {
-          if (fs.existsSync(localPath)) {
-            const fileContent = fs.readFileSync(localPath, 'utf-8');
-            if (fileContent) {
-              currentSettings = { ...currentSettings, ...JSON.parse(fileContent) };
-            }
-          }
-        } catch {}
+        const currentSettings = await loadPersistedSettings(event);
         if (currentSettings.admins) {
           mergedSettings.admins = currentSettings.admins;
         }
@@ -152,11 +311,12 @@ export const handler: Handler = async (event) => {
       const jsonString = JSON.stringify(mergedSettings, null, 2) + '\n';
       const base64Content = Buffer.from(jsonString).toString('base64');
 
+      await saveToNetlifyBlobs(event, 'settings', jsonString);
+
       if (githubToken) {
         await commitToGitHub('src/data/settings.json', base64Content, 'chore(admin): update store settings from studio portal');
       } else {
-        const localPath = path.resolve(process.cwd(), 'src/data/settings.json');
-        fs.writeFileSync(localPath, jsonString);
+        writeJsonWithFallback('src/data/settings.json', TMP_SETTINGS_FILE, jsonString);
       }
 
       return {
@@ -173,25 +333,17 @@ export const handler: Handler = async (event) => {
 
     // 4. Handle admins update
     if (type === 'admins' && Array.isArray(admins)) {
-      let currentSettings = { ...defaultSettingsData };
-      const localPath = path.resolve(process.cwd(), 'src/data/settings.json');
-      try {
-        if (fs.existsSync(localPath)) {
-          const fileContent = fs.readFileSync(localPath, 'utf-8');
-          if (fileContent) {
-            currentSettings = { ...currentSettings, ...JSON.parse(fileContent) };
-          }
-        }
-      } catch {}
-
+      const currentSettings = await loadPersistedSettings(event);
       currentSettings.admins = admins.map((e: string) => e.toLowerCase().trim());
       const jsonString = JSON.stringify(currentSettings, null, 2) + '\n';
       const base64Content = Buffer.from(jsonString).toString('base64');
 
+      await saveToNetlifyBlobs(event, 'settings', jsonString);
+
       if (githubToken) {
         await commitToGitHub('src/data/settings.json', base64Content, 'chore(admin): update admin whitelist from studio portal');
       } else {
-        fs.writeFileSync(localPath, jsonString);
+        writeJsonWithFallback('src/data/settings.json', TMP_SETTINGS_FILE, jsonString);
       }
 
       return {

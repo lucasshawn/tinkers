@@ -3,6 +3,19 @@ import { SiteSettings } from '../types/settings';
 import { adminAuth } from './adminAuth';
 
 export const adminApi = {
+  async loadStoreData(): Promise<{ products?: Product[]; settings?: SiteSettings } | null> {
+    try {
+      const res = await fetch('/.netlify/functions/admin-save?action=load', {
+        method: 'GET',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
   async saveInventory(
     products: Product[],
     newImage?: { filename: string; base64Data: string }
@@ -79,4 +92,3 @@ export const adminApi = {
     return res.json();
   },
 };
-

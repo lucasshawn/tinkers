@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LogOut, ArrowLeft, Layers, Users, CreditCard, Palette } from 'lucide-react';
 import { adminAuth, AdminSession } from '../../services/adminAuth';
 import { adminApi } from '../../services/adminApi';
@@ -11,6 +11,7 @@ import { useSettings } from '../../context/SettingsContext';
 import initialProductsData from '../../data/products.json';
 import { Product } from '../../types';
 import { SiteSettings } from '../../types/settings';
+import { getStoredProducts, saveStoredProducts, PRODUCTS_STORAGE_KEY } from '../../utils/productUtils';
 
 type AdminTab = 'admins' | 'catalog' | 'payments' | 'content';
 
@@ -19,11 +20,23 @@ export const AdminPortal: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTab>('catalog');
   const [products, setProducts] = useState<Product[]>(() => {
     const raw = (initialProductsData as any)?.products || initialProductsData;
-    return Array.isArray(raw) ? raw : [];
+    const defaults = Array.isArray(raw) ? raw : [];
+    return getStoredProducts(defaults);
   });
   const { settings, updateSettings } = useSettings();
   const [notification, setNotification] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (import.meta.env.MODE === 'test') return;
+    if (localStorage.getItem(PRODUCTS_STORAGE_KEY)) return;
+    adminApi.loadStoreData().then((data) => {
+      if (data?.products && Array.isArray(data.products)) {
+        setProducts(data.products);
+        saveStoredProducts(data.products);
+      }
+    });
+  }, []);
 
   if (!session) {
     return <AdminLoginCard onLoginSuccess={(s) => setSession(s)} />;
@@ -42,6 +55,7 @@ export const AdminPortal: React.FC = () => {
     try {
       const res = await adminApi.saveInventory(updated, newImage);
       setProducts(updated);
+      saveStoredProducts(updated);
       setNotification(res.message);
       setTimeout(() => setNotification(null), 4000);
     } catch (err: any) {

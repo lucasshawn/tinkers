@@ -164,6 +164,41 @@ describe('AdminPortal', () => {
       expect(adminApi.saveInventory).toHaveBeenCalled();
       expect(screen.getByText('Inventory saved and published to GitHub!')).toBeInTheDocument();
     });
+
+    // Verify updated inventory was persisted to localStorage so reloading /admin retains changes
+    const stored = JSON.parse(localStorage.getItem('weebles_products_v1') || 'null');
+    expect(Array.isArray(stored)).toBe(true);
+    expect(stored.find((p: any) => p.id === 'weeble-bumblebee')).toBeUndefined();
+  });
+
+  it('loads persisted inventory from localStorage on mount after stock update', async () => {
+    adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
+    localStorage.setItem(
+      'weebles_products_v1',
+      JSON.stringify([
+        {
+          id: 'weeble-custom-persisted',
+          name: 'Persisted Matcha Bear',
+          description: 'Saved in inventory',
+          price: 19.5,
+          images: ['/images/products/bumblebee-keychain.jpg'],
+          category: 'animals',
+          availableVariants: ['magnet'],
+          inStock: true,
+          stockCount: 7,
+        },
+      ])
+    );
+
+    render(
+      <SettingsProvider>
+        <AdminPortal />
+      </SettingsProvider>
+    );
+
+    expect(screen.getByText('Persisted Matcha Bear')).toBeInTheDocument();
+    expect(screen.getByText('Stock: 7')).toBeInTheDocument();
+    expect(screen.queryByText('Chubby Bumblebee')).not.toBeInTheDocument();
   });
 
   it('allows logging out and returns to login card', () => {

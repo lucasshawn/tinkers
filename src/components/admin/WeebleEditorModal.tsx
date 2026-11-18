@@ -24,7 +24,7 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
     product?.availableVariants || ['magnet', 'keychain']
   );
   const [inStock, setInStock] = useState(product ? product.inStock : true);
-  const [stockCount, setStockCount] = useState(product ? product.stockCount : 2);
+  const [stockCount, setStockCount] = useState(product ? String(product.stockCount) : '2');
   const [isOneOfAKind, setIsOneOfAKind] = useState(product?.isOneOfAKind || false);
   const [featured, setFeatured] = useState(product?.featured || false);
   const [uploadedImage, setUploadedImage] = useState<{ filename: string; base64Data: string } | null>(null);
@@ -39,7 +39,7 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
       setImageUrl(product?.images[0] || '');
       setVariants(product?.availableVariants || ['magnet', 'keychain']);
       setInStock(product ? product.inStock : true);
-      setStockCount(product ? product.stockCount : 2);
+      setStockCount(product ? String(product.stockCount) : '2');
       setIsOneOfAKind(product?.isOneOfAKind || false);
       setFeatured(product?.featured || false);
       setUploadedImage(null);
@@ -79,12 +79,48 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
     );
   };
 
+  const handleInStockChange = (checked: boolean) => {
+    setInStock(checked);
+    if (!checked) {
+      setStockCount('0');
+    } else if ((parseInt(stockCount, 10) || 0) === 0) {
+      setStockCount('1');
+    }
+  };
+
+  const handleOneOfAKindChange = (checked: boolean) => {
+    setIsOneOfAKind(checked);
+    if (checked && inStock) {
+      setStockCount('1');
+    }
+  };
+
+  const handleStockCountChange = (val: string) => {
+    setStockCount(val);
+    if (val.trim() === '') return;
+    const num = Math.max(0, parseInt(val, 10) || 0);
+    if (num === 0) {
+      setInStock(false);
+    } else {
+      setInStock(true);
+      if (num > 1 && isOneOfAKind) {
+        setIsOneOfAKind(false);
+      }
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const id =
       product?.id ||
       `weeble-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now().toString().slice(-4)}`;
     const finalImagePath = uploadedImage ? `/images/products/${uploadedImage.filename}` : imageUrl;
+
+    const parsedStock = Math.max(0, parseInt(String(stockCount), 10) || 0);
+    const finalInStock = inStock && parsedStock > 0;
+    const finalStockCount = finalInStock ? parsedStock : 0;
+    const finalIsOneOfAKind = finalStockCount > 1 ? false : isOneOfAKind;
+    const createdAt = product ? product.createdAt : new Date().toISOString();
 
     const savedProduct: Product = {
       id,
@@ -94,10 +130,11 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
       images: [finalImagePath || '/images/products/placeholder.jpg'],
       category,
       availableVariants: variants.length > 0 ? variants : ['magnet'],
-      inStock,
-      stockCount: isOneOfAKind ? 1 : Math.max(0, stockCount),
-      isOneOfAKind,
+      inStock: finalInStock,
+      stockCount: finalStockCount,
+      isOneOfAKind: finalIsOneOfAKind,
       featured,
+      ...(createdAt ? { createdAt } : {}),
     };
 
     onSave(savedProduct, uploadedImage || undefined);
@@ -254,7 +291,7 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
               <input
                 type="checkbox"
                 checked={inStock}
-                onChange={(e) => setInStock(e.target.checked)}
+                onChange={(e) => handleInStockChange(e.target.checked)}
                 className="accent-pink-500"
               />
               <span>In Stock</span>
@@ -263,26 +300,24 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
               <input
                 type="checkbox"
                 checked={isOneOfAKind}
-                onChange={(e) => setIsOneOfAKind(e.target.checked)}
+                onChange={(e) => handleOneOfAKindChange(e.target.checked)}
                 className="accent-pink-500"
               />
               <span>⭐ 1-of-1 Original</span>
             </label>
-            {!isOneOfAKind && (
-              <div className="col-span-2 sm:col-span-1">
-                <label htmlFor="weeble-stock-count" className="block text-[10px] font-bold text-weeble-text mb-0.5">
-                  Stock Count
-                </label>
-                <input
-                  id="weeble-stock-count"
-                  type="number"
-                  min="0"
-                  value={stockCount}
-                  onChange={(e) => setStockCount(parseInt(e.target.value, 10) || 0)}
-                  className="w-full text-xs bg-weeble-pinkWash border border-pink-200 rounded-lg px-2 py-1 text-weeble-text focus:outline-none focus:border-weeble-pink"
-                />
-              </div>
-            )}
+            <div className="col-span-2 sm:col-span-1">
+              <label htmlFor="weeble-stock-count" className="block text-[10px] font-bold text-weeble-text mb-0.5">
+                Stock Count
+              </label>
+              <input
+                id="weeble-stock-count"
+                type="number"
+                min="0"
+                value={stockCount}
+                onChange={(e) => handleStockCountChange(e.target.value)}
+                className="w-full text-xs bg-weeble-pinkWash border border-pink-200 rounded-lg px-2 py-1 text-weeble-text focus:outline-none focus:border-weeble-pink"
+              />
+            </div>
           </div>
 
           <button

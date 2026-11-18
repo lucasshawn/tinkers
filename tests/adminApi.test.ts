@@ -413,6 +413,108 @@ describe('admin-save Netlify Function', () => {
     const res = await handler(event as any, {} as any) as any;
     expect(res.statusCode).toBe(500);
   });
+
+  it('falls back to os.tmpdir() instead of throwing ENOENT when /var/task/src/data is missing in serverless runtime', async () => {
+    vi.spyOn(fs, 'writeFileSync').mockImplementation(((filePath: fs.PathOrFileDescriptor) => {
+      const p = String(filePath).replace(/\\/g, '/');
+      if (p.includes('src/data/') || p.includes('public/images/products')) {
+        const err: any = new Error(`ENOENT: no such file or directory, open '/var/task/src/data/products.json'`);
+        err.code = 'ENOENT';
+        throw err;
+      }
+      return undefined;
+    }) as any);
+
+    const event = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'inventory',
+        products: [
+          {
+            id: 'weeble-bee',
+            name: 'Chubby Bumblebee',
+            description: 'Honey bee',
+            price: 14,
+            images: ['/images/products/bumblebee.jpg'],
+            category: 'animals',
+            availableVariants: ['magnet'],
+            inStock: true,
+            stockCount: 4,
+          },
+        ],
+      }),
+    };
+
+    const res = await handler(event as any, {} as any) as any;
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.success).toBe(true);
+  });
+
+  it('persists inventory to Netlify Blobs when event.blobs context is injected by Netlify', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    });
+    globalThis.fetch = mockFetch;
+
+    const blobsPayload = Buffer.from(
+      JSON.stringify({ url: 'https://edge.netlify.com', token: 'netlify-blobs-token-xyz' })
+    ).toString('base64');
+
+    const event = {
+      httpMethod: 'POST',
+      headers: {
+        authorization: `Bearer ${validToken}`,
+        'x-nf-site-id': 'site-12345',
+      },
+      blobs: blobsPayload,
+      body: JSON.stringify({
+        type: 'inventory',
+        products: [
+          {
+            id: 'weeble-bee',
+            name: 'Chubby Bumblebee',
+            description: 'Honey bee',
+            price: 14,
+            images: ['/images/products/bumblebee.jpg'],
+            category: 'animals',
+            availableVariants: ['magnet'],
+            inStock: true,
+            stockCount: 1,
+          },
+        ],
+      }),
+    };
+
+    const res = await handler(event as any, {} as any) as any;
+    expect(res.statusCode).toBe(200);
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://edge.netlify.com/site-12345/site:weebles-store/products',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: expect.objectContaining({
+          authorization: 'Bearer netlify-blobs-token-xyz',
+        }),
+      })
+    );
+  });
+
+  it('returns persisted products and settings on GET with action=load', async () => {
+    const event = {
+      httpMethod: 'GET',
+      headers: {},
+      queryStringParameters: { action: 'load' },
+    };
+
+    const res = await handler(event as any, {} as any) as any;
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(Array.isArray(body.products)).toBe(true);
+    expect(body.settings).toBeDefined();
+  });
 });
 
 describe('adminApi client service', () => {

@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions';
 import Stripe from 'stripe';
-import productsData from '../../src/data/products.json';
+import { loadPersistedProducts } from './admin-save';
 
 export const getStripe = (): Stripe | null => {
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
@@ -28,8 +28,7 @@ export const handler: Handler = async (event) => {
     }
 
     // Authoritative catalog validation
-    const rawProducts = (productsData as any)?.products || productsData;
-    const catalog: any[] = Array.isArray(rawProducts) ? rawProducts : [];
+    const catalog: any[] = await loadPersistedProducts(event);
 
     for (const item of items) {
       const product = catalog.find((p: any) => p.id === item.productId);

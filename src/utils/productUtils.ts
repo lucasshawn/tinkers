@@ -1,7 +1,42 @@
 import { Product } from '../types';
 
+export const PRODUCTS_STORAGE_KEY = 'weebles_products_v1';
+
+export function getStoredProducts(fallbackProducts: Product[]): Product[] {
+  try {
+    const stored = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch {
+    // Fallback to provided default catalog
+  }
+  return fallbackProducts;
+}
+
+export function saveStoredProducts(products: Product[]): void {
+  try {
+    localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
 export function formatPrice(amount: number): string {
   return `$${amount.toFixed(2)}`;
+}
+
+export const NEW_PRODUCT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function isNewProduct(product: Product, now: number = Date.now()): boolean {
+  if (!product.createdAt) return false;
+  const createdMs = Date.parse(product.createdAt);
+  if (Number.isNaN(createdMs)) return false;
+  const ageMs = now - createdMs;
+  return ageMs >= 0 && ageMs <= NEW_PRODUCT_WINDOW_MS;
 }
 
 export function filterProducts(products: Product[], category: string, searchQuery: string): Product[] {

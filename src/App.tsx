@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CartProvider, useCart } from './context/CartContext';
 import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
@@ -14,6 +14,8 @@ import { AdminPortal } from './components/admin/AdminPortal';
 import { AnnouncementBanner } from './components/AnnouncementBanner';
 import productsData from './data/products.json';
 import { Product } from './types';
+import { getStoredProducts, saveStoredProducts, PRODUCTS_STORAGE_KEY } from './utils/productUtils';
+import { adminApi } from './services/adminApi';
 
 export const AppContent: React.FC = () => {
   const { items } = useCart();
@@ -21,9 +23,23 @@ export const AppContent: React.FC = () => {
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
 
-  // Defensively normalize productsData
-  const rawProducts = (productsData as any)?.products || productsData;
-  const products: Product[] = Array.isArray(rawProducts) ? rawProducts : [];
+  // Defensively normalize productsData and hydrate from persisted admin updates
+  const [products, setProducts] = useState<Product[]>(() => {
+    const rawProducts = (productsData as any)?.products || productsData;
+    const defaults: Product[] = Array.isArray(rawProducts) ? rawProducts : [];
+    return getStoredProducts(defaults);
+  });
+
+  useEffect(() => {
+    if (import.meta.env.MODE === 'test') return;
+    if (localStorage.getItem(PRODUCTS_STORAGE_KEY)) return;
+    adminApi.loadStoreData().then((data) => {
+      if (data?.products && Array.isArray(data.products)) {
+        setProducts(data.products);
+        saveStoredProducts(data.products);
+      }
+    });
+  }, []);
 
   // Check if viewing order success
   const isSuccessPage =

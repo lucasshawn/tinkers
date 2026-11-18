@@ -178,4 +178,28 @@ describe('App smoke test', () => {
     render(React.createElement(App));
     expect(screen.getByText(/Fall Restock is Live!/i)).toBeInTheDocument();
   });
+
+  it('renders updated catalog products persisted from admin portal in localStorage', () => {
+    localStorage.setItem(
+      'weebles_products_v1',
+      JSON.stringify([
+        {
+          id: 'weeble-custom-storefront',
+          name: 'Updated Pistachio Kitty',
+          description: 'Freshly restocked kitty',
+          price: 17.0,
+          images: ['/images/products/bumblebee-keychain.jpg'],
+          category: 'animals',
+          availableVariants: ['magnet', 'keychain'],
+          inStock: true,
+          stockCount: 6,
+          featured: true,
+        },
+      ])
+    );
+
+    render(React.createElement(App));
+    expect(screen.getByText('Updated Pistachio Kitty')).toBeInTheDocument();
+    expect(screen.queryByText('Chubby Bumblebee')).not.toBeInTheDocument();
+  });
 });

@@ -292,4 +292,103 @@ describe('InventoryTab', () => {
     expect(savedProducts[0].isOneOfAKind).toBe(true);
     expect(savedProducts[0].stockCount).toBe(1);
   });
+
+  it('allows editing stock count on a 1-of-1 item and updates inStock and isOneOfAKind accordingly', async () => {
+    const handleSave = vi.fn().mockResolvedValue(undefined);
+    render(<InventoryTab products={mockProducts} onSave={handleSave} />);
+
+    const editBtns = screen.getAllByRole('button', { name: /Edit/i });
+    fireEvent.click(editBtns[1]); // Edit Berry Sweetie (isOneOfAKind: true, inStock: false, stockCount: 0)
+
+    const stockInput = screen.getByLabelText(/Stock Count/i);
+    expect(stockInput).toBeInTheDocument();
+
+    fireEvent.change(stockInput, { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: /Save Weeble/i }));
+
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledTimes(1);
+    });
+
+    const savedProducts = handleSave.mock.calls[0][0];
+    const updatedBerry = savedProducts.find((p: Product) => p.id === 'weeble-strawberry');
+    expect(updatedBerry.stockCount).toBe(5);
+    expect(updatedBerry.inStock).toBe(true);
+    expect(updatedBerry.isOneOfAKind).toBe(false);
+  });
+
+  it('marks item out of stock with stockCount 0 when Stock Count is set to 0 or In Stock is unchecked', async () => {
+    const handleSave = vi.fn().mockResolvedValue(undefined);
+    render(<InventoryTab products={mockProducts} onSave={handleSave} />);
+
+    const editBtns = screen.getAllByRole('button', { name: /Edit/i });
+    fireEvent.click(editBtns[0]); // Edit Chubby Bumblebee (inStock: true, stockCount: 2)
+
+    const stockInput = screen.getByLabelText(/Stock Count/i);
+    fireEvent.change(stockInput, { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: /Save Weeble/i }));
+
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledTimes(1);
+    });
+
+    const savedProducts = handleSave.mock.calls[0][0];
+    const updatedBee = savedProducts.find((p: Product) => p.id === 'weeble-bee');
+    expect(updatedBee.stockCount).toBe(0);
+    expect(updatedBee.inStock).toBe(false);
+  });
+
+  it('stamps a createdAt ISO timestamp when adding a new product and preserves createdAt when editing', async () => {
+    const handleSave = vi.fn().mockResolvedValue(undefined);
+    const existingCreatedAt = '2026-11-01T10:00:00.000Z';
+    const productsWithTimestamp: Product[] = [
+      { ...mockProducts[0], createdAt: existingCreatedAt },
+      mockProducts[1],
+    ];
+
+    render(<InventoryTab products={productsWithTimestamp} onSave={handleSave} />);
+
+    // 1. Add a new product -> should stamp createdAt
+    fireEvent.click(screen.getByRole('button', { name: /\+ Add New Weeble/i }));
+    fireEvent.change(screen.getByLabelText(/Name/i), { target: { value: 'Fresh Peach' } });
+    fireEvent.change(screen.getByLabelText(/Description/i), { target: { value: 'Juicy peach charm' } });
+    fireEvent.click(screen.getByRole('button', { name: /Save Weeble/i }));
+
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledTimes(1);
+    });
+
+    const addedProduct: Product = handleSave.mock.calls[0][0][0];
+    expect(addedProduct.createdAt).toBeDefined();
+    expect(Number.isNaN(Date.parse(addedProduct.createdAt!))).toBe(false);
+
+    // 2. Edit product with existing createdAt -> should preserve original createdAt
+    const editBtns = screen.getAllByRole('button', { name: /Edit/i });
+    fireEvent.click(editBtns[0]);
+    fireEvent.change(screen.getByDisplayValue('Chubby Bumblebee'), {
+      target: { value: 'Updated Bumblebee' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Save Weeble/i }));
+
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledTimes(2);
+    });
+
+    const editedWithTimestamp: Product = handleSave.mock.calls[1][0][0];
+    expect(editedWithTimestamp.createdAt).toBe(existingCreatedAt);
+
+    // 3. Edit legacy product without createdAt -> should keep createdAt undefined
+    fireEvent.click(editBtns[1]);
+    fireEvent.change(screen.getByDisplayValue('Berry Sweetie'), {
+      target: { value: 'Updated Berry Sweetie' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Save Weeble/i }));
+
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledTimes(3);
+    });
+
+    const editedLegacy: Product = handleSave.mock.calls[2][0][1];
+    expect(editedLegacy.createdAt).toBeUndefined();
+  });
 });
