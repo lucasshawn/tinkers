@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createCheckoutSession } from '../src/services/stripe';
 import { handler } from '../netlify/functions/create-checkout';
+import * as adminSave from '../netlify/functions/admin-save';
 import { CartItem } from '../src/types';
 
 const mockCreateSession = vi.fn();
@@ -211,6 +212,74 @@ describe('create-checkout Netlify Function handler', () => {
     expect(JSON.parse(response.body).url).toBe('https://checkout.stripe.com/pay/cs_test_mock');
   });
 
+  it('uses authoritative variant-specific price from variantPrices and supports items without variants', async () => {
+    process.env.STRIPE_SECRET_KEY = 'sk_test_fake_key_123';
+    mockCreateSession.mockClear();
+    mockCreateSession.mockResolvedValue({
+      url: 'https://checkout.stripe.com/pay/cs_test_mock',
+    });
+
+    vi.spyOn(adminSave, 'loadPersistedProducts').mockResolvedValue([
+      {
+        id: 'weeble-diff-prices',
+        name: 'Custom Price Weeble',
+        price: 12.0,
+        variantPrices: {
+          magnet: 12.0,
+          keychain: 17.5,
+        },
+        availableVariants: ['magnet', 'keychain'],
+        inStock: true,
+        stockCount: 5,
+        images: ['/img.jpg'],
+      },
+      {
+        id: 'weeble-standalone',
+        name: 'Standalone Desk Weeble',
+        price: 20.0,
+        availableVariants: [],
+        inStock: true,
+        stockCount: 2,
+        images: ['/img2.jpg'],
+      },
+    ]);
+
+    const response = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { origin: 'https://weebles.store' },
+        body: JSON.stringify({
+          items: [
+            {
+              id: 'weeble-diff-prices-keychain',
+              productId: 'weeble-diff-prices',
+              name: 'Custom Price Weeble',
+              variant: 'keychain',
+              price: 12.0,
+              quantity: 1,
+            },
+            {
+              id: 'weeble-standalone-standard',
+              productId: 'weeble-standalone',
+              name: 'Standalone Desk Weeble',
+              price: 20.0,
+              quantity: 1,
+            },
+          ],
+        }),
+      } as any,
+      {} as any,
+      () => {}
+    )) as any;
+
+    expect(response.statusCode).toBe(200);
+    const lineItems = mockCreateSession.mock.calls[0][0].line_items;
+    expect(lineItems[0].price_data.unit_amount).toBe(1750);
+    expect(lineItems[0].price_data.product_data.name).toBe('Custom Price Weeble (🔑 Keychain)');
+    expect(lineItems[1].price_data.unit_amount).toBe(2000);
+    expect(lineItems[1].price_data.product_data.name).toBe('Standalone Desk Weeble');
+  });
+
   it('returns 400 when an item productId is not found in catalog', async () => {
     const response = (await handler(
       {
@@ -247,6 +316,7 @@ describe('create-checkout Netlify Function handler', () => {
 
   it('ignores manipulated client price and uses authoritative catalog price', async () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_fake_key_123';
+    mockCreateSession.mockClear();
     mockCreateSession.mockResolvedValue({
       url: 'https://checkout.stripe.com/pay/cs_test_mock',
     });

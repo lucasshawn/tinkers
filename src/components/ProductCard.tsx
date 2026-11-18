@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Product, VariantType } from '../types';
 import { useCart } from '../context/CartContext';
-import { formatPrice, isNewProduct } from '../utils/productUtils';
+import { formatPrice, getProductVariantPrice, isNewProduct } from '../utils/productUtils';
 import { Sparkles, Check } from 'lucide-react';
 
 interface ProductCardProps {
@@ -10,20 +10,28 @@ interface ProductCardProps {
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const { addToCart, items } = useCart();
-  const [selectedVariant, setSelectedVariant] = useState<VariantType>(
-    product.availableVariants[0] || 'magnet'
+  const [selectedVariant, setSelectedVariant] = useState<VariantType | undefined>(
+    product.availableVariants[0]
   );
   const [justAdded, setJustAdded] = useState(false);
 
-  const currentItem = items.find(
-    (item) => item.id === `${product.id}-${selectedVariant}`
-  );
+  useEffect(() => {
+    if (product.availableVariants.length === 0) {
+      setSelectedVariant(undefined);
+    } else if (!selectedVariant || !product.availableVariants.includes(selectedVariant)) {
+      setSelectedVariant(product.availableVariants[0]);
+    }
+  }, [product.availableVariants, selectedVariant]);
+
+  const compositeId = `${product.id}-${selectedVariant || 'standard'}`;
+  const currentItem = items.find((item) => item.id === compositeId);
   const maxAllowed = product.isOneOfAKind ? 1 : (product.stockCount || 10);
   const isMaxReached = currentItem ? currentItem.quantity >= maxAllowed : false;
+  const activePrice = getProductVariantPrice(product, selectedVariant);
 
   const handleAddToCart = () => {
     if (!product.inStock || isMaxReached) return;
-    addToCart(product, selectedVariant);
+    addToCart(product, selectedVariant as VariantType);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1200);
   };
@@ -79,7 +87,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             {product.name}
           </h3>
           <span className="font-bubble text-xl font-bold text-weeble-pink whitespace-nowrap">
-            {formatPrice(product.price)}
+            {formatPrice(activePrice)}
           </span>
         </div>
 
@@ -88,32 +96,34 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         </p>
 
         {/* Variant Selector Pills */}
-        <div className="mb-3.5">
-          <label className="block text-[11px] font-bold text-weeble-textMuted uppercase tracking-wider mb-1.5">
-            Choose Style:
-          </label>
-          <div className="grid grid-cols-2 gap-1.5">
-            {product.availableVariants.map((variant) => {
-              const isSelected = selectedVariant === variant;
-              return (
-                <button
-                  key={variant}
-                  type="button"
-                  onClick={() => setSelectedVariant(variant)}
-                  aria-label={variant}
-                  className={`text-xs font-bold py-1.5 px-2 rounded-xl transition-all border flex items-center justify-center gap-1 ${
-                    isSelected
-                      ? 'bg-weeble-pink text-white border-weeble-pink shadow-sm scale-[1.02]'
-                      : 'bg-white text-weeble-text border-pink-200 hover:bg-weeble-pinkWash'
-                  }`}
-                >
-                  <span>{variant === 'magnet' ? '🧲' : '🔑'}</span>
-                  <span className="capitalize">{variant}</span>
-                </button>
-              );
-            })}
+        {product.availableVariants.length > 0 && (
+          <div className="mb-3.5">
+            <label className="block text-[11px] font-bold text-weeble-textMuted uppercase tracking-wider mb-1.5">
+              Choose Style:
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {product.availableVariants.map((variant) => {
+                const isSelected = selectedVariant === variant;
+                return (
+                  <button
+                    key={variant}
+                    type="button"
+                    onClick={() => setSelectedVariant(variant)}
+                    aria-label={variant}
+                    className={`text-xs font-bold py-1.5 px-2 rounded-xl transition-all border flex items-center justify-center gap-1 ${
+                      isSelected
+                        ? 'bg-weeble-pink text-white border-weeble-pink shadow-sm scale-[1.02]'
+                        : 'bg-white text-weeble-text border-pink-200 hover:bg-weeble-pinkWash'
+                    }`}
+                  >
+                    <span>{variant === 'magnet' ? '🧲' : '🔑'}</span>
+                    <span className="capitalize">{variant}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Action Button */}
         <button

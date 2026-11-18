@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { Product } from '../../types';
-import { formatPrice } from '../../utils/productUtils';
+import { formatProductPriceSummary } from '../../utils/productUtils';
 import { WeebleEditorModal } from './WeebleEditorModal';
 
 export interface InventoryTabProps {
@@ -120,7 +120,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ products, onSave }) 
                   </div>
 
                   <div className="flex items-center gap-3 text-xs text-weeble-textMuted">
-                    <span className="font-bold text-weeble-pink">{formatPrice(item.price)}</span>
+                    <span className="font-bold text-weeble-pink">{formatProductPriceSummary(item)}</span>
                     <span>•</span>
                     <span className="capitalize">{item.category}</span>
                     <span>•</span>

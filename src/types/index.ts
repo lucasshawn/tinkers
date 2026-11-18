@@ -2,11 +2,14 @@ export * from './settings';
 
 export type VariantType = 'magnet' | 'keychain';
 
+export type VariantPrices = Partial<Record<VariantType, number>>;
+
 export interface Product {
   id: string;
   name: string;
   description: string;
   price: number;
+  variantPrices?: VariantPrices;
   images: string[];
   category: 'animals' | 'sweets' | 'fantasy' | 'mini-friends';
   availableVariants: VariantType[];
@@ -18,10 +21,10 @@ export interface Product {
 }
 
 export interface CartItem {
-  id: string; // composite key: `${productId}-${variant}`
+  id: string; // composite key: `${productId}-${variant || 'standard'}`
   productId: string;
   name: string;
-  variant: VariantType;
+  variant?: VariantType;
   price: number;
   image: string;
   quantity: number;

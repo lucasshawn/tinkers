@@ -98,9 +98,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onCheckout, isLoadingChe
                     <h4 className="font-bubble text-sm font-bold text-weeble-text truncate">
                       {item.name}
                     </h4>
-                    <span className="inline-block text-[11px] font-bold text-pink-600 bg-pink-100 px-2 py-0.5 rounded-md capitalize my-0.5">
-                      {item.variant === 'magnet' ? '🧲 Magnet' : '🔑 Keychain'}
-                    </span>
+                    {item.variant && (
+                      <span className="inline-block text-[11px] font-bold text-pink-600 bg-pink-100 px-2 py-0.5 rounded-md capitalize my-0.5">
+                        {item.variant === 'magnet' ? '🧲 Magnet' : '🔑 Keychain'}
+                      </span>
+                    )}
                     <div className="text-xs font-bold text-weeble-text">
                       {formatPrice(item.price)}
                     </div>

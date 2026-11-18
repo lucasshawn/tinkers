@@ -61,18 +61,30 @@ export const handler: Handler = async (event) => {
 
     const line_items = items.map((item: any) => {
       const product = catalog.find((p: any) => p.id === item.productId)!;
+      const unitPrice =
+        item.variant &&
+        typeof product.variantPrices?.[item.variant] === 'number' &&
+        !Number.isNaN(product.variantPrices[item.variant])
+          ? product.variantPrices[item.variant]
+          : product.price;
+      const variantLabel =
+        item.variant === 'magnet'
+          ? ' (🧲 Refrigerator Magnet)'
+          : item.variant === 'keychain'
+          ? ' (🔑 Keychain)'
+          : '';
       return {
         price_data: {
           currency: 'usd',
           product_data: {
-            name: `${product.name} (${item.variant === 'magnet' ? '🧲 Refrigerator Magnet' : '🔑 Keychain'})`,
+            name: `${product.name}${variantLabel}`,
             images: item.image ? [item.image] : (product.images?.[0] ? [product.images[0]] : []),
             metadata: {
-              variant: item.variant,
+              variant: item.variant || 'standard',
               productId: item.productId,
             },
           },
-          unit_amount: Math.round(product.price * 100),
+          unit_amount: Math.round(unitPrice * 100),
         },
         quantity: item.quantity,
       };

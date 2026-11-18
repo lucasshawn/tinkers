@@ -41,6 +41,49 @@ describe('CartContext', () => {
     expect(result.current.isCartOpen).toBe(true);
   });
 
+  it('uses per-variant prices from variantPrices when adding magnet vs keychain', () => {
+    const variedPriceProduct: Product = {
+      ...testProduct,
+      id: 'prod-varied',
+      price: 14.0,
+      variantPrices: {
+        magnet: 14.0,
+        keychain: 16.5,
+      },
+    };
+    const { result } = renderHook(() => useCart(), { wrapper });
+
+    act(() => {
+      result.current.addToCart(variedPriceProduct, 'magnet');
+      result.current.addToCart(variedPriceProduct, 'keychain');
+    });
+
+    expect(result.current.items).toHaveLength(2);
+    expect(result.current.items[0].price).toBe(14.0);
+    expect(result.current.items[1].price).toBe(16.5);
+    expect(result.current.subtotal).toBe(30.5);
+  });
+
+  it('supports adding products with no magnet or keychain variants using base price', () => {
+    const noVariantProduct: Product = {
+      ...testProduct,
+      id: 'prod-no-variant',
+      price: 18.0,
+      availableVariants: [],
+    };
+    const { result } = renderHook(() => useCart(), { wrapper });
+
+    act(() => {
+      result.current.addToCart(noVariantProduct);
+    });
+
+    expect(result.current.items).toHaveLength(1);
+    expect(result.current.items[0].id).toBe('prod-no-variant-standard');
+    expect(result.current.items[0].variant).toBeUndefined();
+    expect(result.current.items[0].price).toBe(18.0);
+    expect(result.current.subtotal).toBe(18.0);
+  });
+
   it('keeps distinct line items for different variants of the same product', () => {
     const { result } = renderHook(() => useCart(), { wrapper });
 

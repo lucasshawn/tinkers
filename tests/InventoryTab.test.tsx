@@ -9,6 +9,10 @@ const mockProducts: Product[] = [
     name: 'Chubby Bumblebee',
     description: 'Sweet honey bee',
     price: 14.0,
+    variantPrices: {
+      magnet: 14.0,
+      keychain: 14.0,
+    },
     images: ['/images/products/bumblebee.jpg'],
     category: 'animals',
     availableVariants: ['magnet', 'keychain'],
@@ -21,6 +25,9 @@ const mockProducts: Product[] = [
     name: 'Berry Sweetie',
     description: 'Delicious strawberry treat',
     price: 16.5,
+    variantPrices: {
+      magnet: 16.5,
+    },
     images: ['/images/products/strawberry.jpg'],
     category: 'sweets',
     availableVariants: ['magnet'],
@@ -41,6 +48,21 @@ describe('InventoryTab', () => {
     expect(screen.getByText('Chubby Bumblebee')).toBeInTheDocument();
     expect(screen.getByText('$14.00')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /\+ Add New Weeble/i })).toBeInTheDocument();
+  });
+
+  it('displays separate magnet and keychain prices in the inventory list when they differ', () => {
+    const productsWithDiffPrices: Product[] = [
+      {
+        ...mockProducts[0],
+        variantPrices: {
+          magnet: 14.0,
+          keychain: 16.5,
+        },
+      },
+    ];
+    render(<InventoryTab products={productsWithDiffPrices} onSave={vi.fn()} />);
+
+    expect(screen.getByText('🧲 $14.00 / 🔑 $16.50')).toBeInTheDocument();
   });
 
   it('opens editor modal with product data when clicking edit', () => {
@@ -70,7 +92,7 @@ describe('InventoryTab', () => {
     expect(screen.getByText('Chubby Bumblebee')).toBeInTheDocument();
   });
 
-  it('adds a new product and invokes onSave', async () => {
+  it('adds a new product with separate magnet and keychain prices and invokes onSave', async () => {
     const handleSave = vi.fn().mockResolvedValue(undefined);
     render(<InventoryTab products={mockProducts} onSave={handleSave} />);
 
@@ -83,8 +105,11 @@ describe('InventoryTab', () => {
     const nameInput = screen.getByLabelText(/Name/i);
     fireEvent.change(nameInput, { target: { value: 'Rainbow Bunny' } });
 
-    const priceInput = screen.getByLabelText(/Price/i);
-    fireEvent.change(priceInput, { target: { value: '18.00' } });
+    const magnetPriceInput = screen.getByLabelText(/Magnet Price/i);
+    fireEvent.change(magnetPriceInput, { target: { value: '18.00' } });
+
+    const keychainPriceInput = screen.getByLabelText(/Keychain Price/i);
+    fireEvent.change(keychainPriceInput, { target: { value: '19.50' } });
 
     const descInput = screen.getByLabelText(/Description/i);
     fireEvent.change(descInput, { target: { value: 'A cute rainbow bunny figurine' } });
@@ -100,6 +125,41 @@ describe('InventoryTab', () => {
     expect(savedProducts).toHaveLength(3);
     expect(savedProducts[0].name).toBe('Rainbow Bunny');
     expect(savedProducts[0].price).toBe(18);
+    expect(savedProducts[0].variantPrices).toEqual({
+      magnet: 18,
+      keychain: 19.5,
+    });
+  });
+
+  it('allows unchecking both magnet and keychain to save a product with no variant options and a single base price', async () => {
+    const handleSave = vi.fn().mockResolvedValue(undefined);
+    render(<InventoryTab products={mockProducts} onSave={handleSave} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /\+ Add New Weeble/i }));
+
+    fireEvent.change(screen.getByLabelText(/Name/i), { target: { value: 'Desk Sculpture' } });
+    fireEvent.change(screen.getByLabelText(/Description/i), { target: { value: 'Standalone figurine' } });
+
+    // Uncheck both magnet and keychain
+    fireEvent.click(screen.getByRole('checkbox', { name: /Refrigerator Magnet/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Keychain/i }));
+
+    expect(screen.queryByLabelText(/Magnet Price/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Keychain Price/i)).not.toBeInTheDocument();
+
+    const basePriceInput = screen.getByLabelText(/Price \(\$ USD\)/i);
+    fireEvent.change(basePriceInput, { target: { value: '22.00' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Weeble/i }));
+
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledTimes(1);
+    });
+
+    const savedProduct: Product = handleSave.mock.calls[0][0][0];
+    expect(savedProduct.availableVariants).toEqual([]);
+    expect(savedProduct.price).toBe(22);
+    expect(savedProduct.variantPrices).toEqual({});
   });
 
   it('edits an existing product and invokes onSave with updated list', async () => {

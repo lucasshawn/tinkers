@@ -42,6 +42,18 @@ const testOneOfAKind: Product = {
   isOneOfAKind: true,
 };
 
+const testNoVariantProduct: Product = {
+  id: 'cart-prod-4',
+  name: 'Desk Figurine Sprout',
+  description: 'Standalone figurine',
+  price: 20.0,
+  images: ['/img4.jpg'],
+  category: 'mini-friends',
+  availableVariants: [],
+  inStock: true,
+  stockCount: 2,
+};
+
 interface TestHelperProps {
   onCheckout?: (giftNote: string) => void;
   isLoadingCheckout?: boolean;
@@ -79,6 +91,14 @@ const CartTestHelper: React.FC<TestHelperProps> = ({
       >
         Add 1-of-1 Item
       </button>
+      <button
+        onClick={() => {
+          addToCart(testNoVariantProduct);
+          setIsCartOpen(true);
+        }}
+      >
+        Add No-Variant Item
+      </button>
       <button onClick={() => setIsCartOpen(true)}>Open Cart</button>
       <button onClick={() => setIsCartOpen(false)}>Close Cart</button>
       <CartDrawer onCheckout={onCheckout} isLoadingCheckout={isLoadingCheckout} />
@@ -105,6 +125,20 @@ describe('CartDrawer', () => {
     expect(screen.getByText('Strawberry Bunny')).toBeInTheDocument();
     expect(screen.getByText(/🧲 magnet/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Checkout with Stripe/i })).toBeInTheDocument();
+  });
+
+  it('does not render magnet/keychain badge for items without a variant', () => {
+    render(
+      <CartProvider>
+        <CartTestHelper />
+      </CartProvider>
+    );
+
+    fireEvent.click(screen.getByText('Add No-Variant Item'));
+
+    expect(screen.getByText('Desk Figurine Sprout')).toBeInTheDocument();
+    expect(screen.queryByText(/🧲 Magnet/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/🔑 Keychain/i)).not.toBeInTheDocument();
   });
 
   it('does not render when isCartOpen is false', () => {

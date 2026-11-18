@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { CartItem, Product, VariantType } from '../types';
+import { getProductVariantPrice } from '../utils/productUtils';
 
 export interface CartContextType {
   items: CartItem[];
-  addToCart: (product: Product, variant: VariantType) => void;
+  addToCart: (product: Product, variant?: VariantType) => void;
   removeFromCart: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number) => void;
   clearCart: () => void;
@@ -35,9 +36,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [items]);
 
-  const addToCart = useCallback((product: Product, variant: VariantType) => {
-    const compositeId = `${product.id}-${variant}`;
+  const addToCart = useCallback((product: Product, variant?: VariantType) => {
+    const effectiveVariant = variant ?? product.availableVariants[0];
+    const compositeId = `${product.id}-${effectiveVariant || 'standard'}`;
     const maxQuantity = product.isOneOfAKind ? 1 : (product.stockCount || 10);
+    const unitPrice = getProductVariantPrice(product, effectiveVariant);
 
     setItems((prev) => {
       const existing = prev.find((item) => item.id === compositeId);
@@ -56,8 +59,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: compositeId,
         productId: product.id,
         name: product.name,
-        variant,
-        price: product.price,
+        ...(effectiveVariant ? { variant: effectiveVariant } : {}),
+        price: unitPrice,
         image: product.images[0] || '',
         quantity: 1,
         maxQuantity,

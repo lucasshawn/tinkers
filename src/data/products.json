@@ -4,6 +4,10 @@
     "name": "Chubby Bumblebee",
     "description": "Hand-sculpted sweet honey bee with bright yellow glaze, black stripes, blushing pink cheeks, and white wings. Sturdy swivel clasp keychain or magnet.",
     "price": 14.00,
+    "variantPrices": {
+      "keychain": 14.00,
+      "magnet": 14.00
+    },
     "images": ["/images/products/bumblebee-keychain.jpg"],
     "category": "animals",
     "availableVariants": ["keychain", "magnet"],
@@ -17,6 +21,10 @@
     "name": "Blueberry Pancake Stack",
     "description": "Triple stack of golden syrup-glazed pancakes topped with melted butter and fresh blueberries. Perfect miniature brunch accessory.",
     "price": 15.00,
+    "variantPrices": {
+      "keychain": 15.00,
+      "magnet": 15.00
+    },
     "images": ["/images/products/blueberry-pancakes.jpg"],
     "category": "sweets",
     "availableVariants": ["keychain", "magnet"],
@@ -30,6 +38,10 @@
     "name": "Croissant & Chocolate Bar",
     "description": "Golden flaky Parisian croissant charm paired with a glossy dark chocolate bar charm on a sturdy silver chain.",
     "price": 16.50,
+    "variantPrices": {
+      "keychain": 16.50,
+      "magnet": 16.50
+    },
     "images": ["/images/products/croissant-chocolate.jpg"],
     "category": "sweets",
     "availableVariants": ["keychain", "magnet"],
@@ -43,6 +55,10 @@
     "name": "Strawberry Cream Macaron",
     "description": "Pastel pink French macaron with ruffled feet and vanilla buttercream filling, paired with a dangling pastel pearl charm.",
     "price": 14.50,
+    "variantPrices": {
+      "keychain": 14.50,
+      "magnet": 14.50
+    },
     "images": ["/images/products/strawberry-macaron.jpg"],
     "category": "sweets",
     "availableVariants": ["keychain", "magnet"],
@@ -56,6 +72,10 @@
     "name": "Sweet Ghostie Spook",
     "description": "Cheerfully sculpted white ghost Weeble with tiny arms open for hugs. Perfect miniature companion as a refrigerator magnet or keychain.",
     "price": 13.50,
+    "variantPrices": {
+      "magnet": 13.50,
+      "keychain": 13.50
+    },
     "images": ["/images/products/ghost-weeble.jpg"],
     "category": "fantasy",
     "availableVariants": ["magnet", "keychain"],
@@ -69,6 +89,10 @@
     "name": "Pumpkin Spice Latte Mug",
     "description": "Carved miniature bright orange pumpkin mug topped with a generous swirl of fluffy whipped cream and high-gloss protective glaze.",
     "price": 15.00,
+    "variantPrices": {
+      "magnet": 15.00,
+      "keychain": 15.00
+    },
     "images": ["/images/products/pumpkin-spice-mug.jpg"],
     "category": "sweets",
     "availableVariants": ["magnet", "keychain"],
@@ -82,6 +106,10 @@
     "name": "Strawberry Bunny",
     "description": "Hand-sculpted baby bunny wearing a fresh strawberry beret. Coated in glossy, UV-cured protective glaze.",
     "price": 14.00,
+    "variantPrices": {
+      "magnet": 14.00,
+      "keychain": 14.00
+    },
     "images": ["https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=600&auto=format&fit=crop&q=80"],
     "category": "animals",
     "availableVariants": ["magnet", "keychain"],
@@ -95,6 +123,10 @@
     "name": "Matcha Boba Froggy",
     "description": "Round chubby frog resting atop a miniature matcha boba cup with tapioca pearls. Ultra cute refrigerator companion.",
     "price": 15.00,
+    "variantPrices": {
+      "magnet": 15.00,
+      "keychain": 15.00
+    },
     "images": ["https://images.unsplash.com/photo-1535268647677-300dbf3d78d1?w=600&auto=format&fit=crop&q=80"],
     "category": "animals",
     "availableVariants": ["magnet", "keychain"],
@@ -108,6 +140,10 @@
     "name": "Sweet Lavender Spook",
     "description": "Gentle friendly pastel ghost holding a blooming lavender flower. Glows softly in the dark under UV light.",
     "price": 13.50,
+    "variantPrices": {
+      "magnet": 13.50,
+      "keychain": 13.50
+    },
     "images": ["/images/products/ghost-weeble.jpg"],
     "category": "fantasy",
     "availableVariants": ["magnet", "keychain"],

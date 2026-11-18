@@ -1,4 +1,4 @@
-import { Product } from '../types';
+import { Product, VariantType } from '../types';
 
 export const PRODUCTS_STORAGE_KEY = 'weebles_products_v1';
 
@@ -29,6 +29,43 @@ export function formatPrice(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
+export function getProductVariantPrice(product: Product, variant?: VariantType): number {
+  if (
+    variant &&
+    typeof product.variantPrices?.[variant] === 'number' &&
+    !Number.isNaN(product.variantPrices[variant]!)
+  ) {
+    return product.variantPrices[variant]!;
+  }
+  if (product.availableVariants && product.availableVariants.length > 0) {
+    const firstVariant = product.availableVariants[0];
+    if (
+      typeof product.variantPrices?.[firstVariant] === 'number' &&
+      !Number.isNaN(product.variantPrices[firstVariant]!)
+    ) {
+      return product.variantPrices[firstVariant]!;
+    }
+  }
+  return product.price;
+}
+
+export function formatProductPriceSummary(product: Product): string {
+  if (!product.availableVariants || product.availableVariants.length === 0) {
+    return formatPrice(product.price);
+  }
+  const prices = product.availableVariants.map((v) => ({
+    variant: v,
+    price: getProductVariantPrice(product, v),
+  }));
+  const allSame = prices.every((p) => p.price === prices[0].price);
+  if (allSame) {
+    return formatPrice(prices[0].price);
+  }
+  return prices
+    .map((p) => `${p.variant === 'magnet' ? '🧲' : '🔑'} ${formatPrice(p.price)}`)
+    .join(' / ');
+}
+
 export const NEW_PRODUCT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 export function isNewProduct(product: Product, now: number = Date.now()): boolean {
@@ -52,7 +89,13 @@ export function filterProducts(products: Product[], category: string, searchQuer
     } else if (category === 'keychains') {
       matchesCategory = product.availableVariants.includes('keychain');
     } else if (category === 'under-15') {
-      matchesCategory = product.price < 15.0;
+      if (product.availableVariants && product.availableVariants.length > 0) {
+        matchesCategory = product.availableVariants.some(
+          (v) => getProductVariantPrice(product, v) < 15.0
+        );
+      } else {
+        matchesCategory = product.price < 15.0;
+      }
     } else if (category === 'featured') {
       matchesCategory = Boolean(product.featured);
     } else {

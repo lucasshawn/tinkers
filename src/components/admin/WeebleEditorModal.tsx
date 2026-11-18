@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { Product, VariantType } from '../../types';
+import { Product, VariantPrices, VariantType } from '../../types';
 
 export interface WeebleEditorModalProps {
   product: Product | null;
@@ -18,10 +18,16 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
   const [name, setName] = useState(product?.name || '');
   const [description, setDescription] = useState(product?.description || '');
   const [price, setPrice] = useState(product ? String(product.price) : '14.00');
+  const [magnetPrice, setMagnetPrice] = useState(
+    product ? String(product.variantPrices?.magnet ?? product.price) : '14.00'
+  );
+  const [keychainPrice, setKeychainPrice] = useState(
+    product ? String(product.variantPrices?.keychain ?? product.price) : '14.00'
+  );
   const [category, setCategory] = useState<Product['category']>(product?.category || 'sweets');
   const [imageUrl, setImageUrl] = useState(product?.images[0] || '');
   const [variants, setVariants] = useState<VariantType[]>(
-    product?.availableVariants || ['magnet', 'keychain']
+    product ? product.availableVariants : ['magnet', 'keychain']
   );
   const [inStock, setInStock] = useState(product ? product.inStock : true);
   const [stockCount, setStockCount] = useState(product ? String(product.stockCount) : '2');
@@ -35,9 +41,15 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
       setName(product?.name || '');
       setDescription(product?.description || '');
       setPrice(product ? String(product.price) : '14.00');
+      setMagnetPrice(
+        product ? String(product.variantPrices?.magnet ?? product.price) : '14.00'
+      );
+      setKeychainPrice(
+        product ? String(product.variantPrices?.keychain ?? product.price) : '14.00'
+      );
       setCategory(product?.category || 'sweets');
       setImageUrl(product?.images[0] || '');
-      setVariants(product?.availableVariants || ['magnet', 'keychain']);
+      setVariants(product ? product.availableVariants : ['magnet', 'keychain']);
       setInStock(product ? product.inStock : true);
       setStockCount(product ? String(product.stockCount) : '2');
       setIsOneOfAKind(product?.isOneOfAKind || false);
@@ -158,14 +170,28 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
     const finalStockCount = finalInStock ? parsedStock : 0;
     const finalIsOneOfAKind = finalStockCount > 1 ? false : isOneOfAKind;
 
+    const variantPrices: VariantPrices = {};
+    if (variants.includes('magnet')) {
+      variantPrices.magnet = parseFloat(magnetPrice) || 14.0;
+    }
+    if (variants.includes('keychain')) {
+      variantPrices.keychain = parseFloat(keychainPrice) || 14.0;
+    }
+
+    const firstEnabledVariant = variants[0];
+    const resolvedBasePrice = firstEnabledVariant
+      ? variantPrices[firstEnabledVariant]!
+      : parseFloat(price) || 14.0;
+
     const savedProduct: Product = {
       id,
       name,
       description,
-      price: parseFloat(price) || 14.0,
+      price: resolvedBasePrice,
+      variantPrices,
       images: [finalImagePath || '/images/products/placeholder.jpg'],
       category,
-      availableVariants: variants.length > 0 ? variants : ['magnet'],
+      availableVariants: variants,
       inStock: finalInStock,
       stockCount: finalStockCount,
       isOneOfAKind: finalIsOneOfAKind,
@@ -214,35 +240,21 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="weeble-name" className="block text-xs font-bold text-weeble-text mb-1">
-              Name
-            </label>
-            <input
-              id="weeble-name"
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3 py-2 text-weeble-text focus:outline-none focus:border-weeble-pink"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label htmlFor="weeble-price" className="block text-xs font-bold text-weeble-text mb-1">
-                Price ($ USD)
+              <label htmlFor="weeble-name" className="block text-xs font-bold text-weeble-text mb-1">
+                Name
               </label>
               <input
-                id="weeble-price"
-                type="number"
-                step="0.01"
+                id="weeble-name"
+                type="text"
                 required
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3 py-2 text-weeble-text focus:outline-none focus:border-weeble-pink"
               />
             </div>
+
             <div>
               <label htmlFor="weeble-category" className="block text-xs font-bold text-weeble-text mb-1">
                 Category
@@ -258,6 +270,96 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
                 <option value="fantasy">✨ Fantasy</option>
                 <option value="mini-friends">🌸 Mini-Friends</option>
               </select>
+            </div>
+          </div>
+
+          {/* Variants & Per-Variant Pricing */}
+          <div>
+            <label className="block text-xs font-bold text-weeble-text mb-1.5">
+              Available Styles & Pricing
+            </label>
+            <div className="space-y-2.5 bg-weeble-pinkWash/60 border border-pink-200 rounded-2xl p-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="flex items-center gap-2 text-xs font-bold text-weeble-text cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={variants.includes('magnet')}
+                    onChange={() => handleToggleVariant('magnet')}
+                    className="accent-pink-500 w-4 h-4"
+                  />
+                  <span>🧲 Refrigerator Magnet</span>
+                </label>
+                {variants.includes('magnet') && (
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="weeble-magnet-price"
+                      className="text-xs font-bold text-weeble-textMuted whitespace-nowrap"
+                    >
+                      Magnet Price ($ USD)
+                    </label>
+                    <input
+                      id="weeble-magnet-price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      value={magnetPrice}
+                      onChange={(e) => setMagnetPrice(e.target.value)}
+                      className="w-24 text-sm bg-white border border-pink-200 rounded-xl px-2.5 py-1.5 text-weeble-text font-bold focus:outline-none focus:border-weeble-pink"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <label className="flex items-center gap-2 text-xs font-bold text-weeble-text cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={variants.includes('keychain')}
+                    onChange={() => handleToggleVariant('keychain')}
+                    className="accent-pink-500 w-4 h-4"
+                  />
+                  <span>🔑 Keychain</span>
+                </label>
+                {variants.includes('keychain') && (
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="weeble-keychain-price"
+                      className="text-xs font-bold text-weeble-textMuted whitespace-nowrap"
+                    >
+                      Keychain Price ($ USD)
+                    </label>
+                    <input
+                      id="weeble-keychain-price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      value={keychainPrice}
+                      onChange={(e) => setKeychainPrice(e.target.value)}
+                      className="w-24 text-sm bg-white border border-pink-200 rounded-xl px-2.5 py-1.5 text-weeble-text font-bold focus:outline-none focus:border-weeble-pink"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {variants.length === 0 && (
+                <div className="pt-2 border-t border-pink-200/60">
+                  <label htmlFor="weeble-price" className="block text-xs font-bold text-weeble-text mb-1">
+                    Price ($ USD)
+                  </label>
+                  <input
+                    id="weeble-price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    className="w-full text-sm bg-white border border-pink-200 rounded-xl px-3 py-2 text-weeble-text focus:outline-none focus:border-weeble-pink"
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -297,31 +399,6 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
                   className="w-full text-xs text-weeble-textMuted file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-weeble-pink file:text-white cursor-pointer"
                 />
               </div>
-            </div>
-          </div>
-
-          {/* Variants */}
-          <div>
-            <label className="block text-xs font-bold text-weeble-text mb-1">Available Styles</label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={variants.includes('magnet')}
-                  onChange={() => handleToggleVariant('magnet')}
-                  className="accent-pink-500"
-                />
-                <span>🧲 Refrigerator Magnet</span>
-              </label>
-              <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={variants.includes('keychain')}
-                  onChange={() => handleToggleVariant('keychain')}
-                  className="accent-pink-500"
-                />
-                <span>🔑 Keychain</span>
-              </label>
             </div>
           </div>
 

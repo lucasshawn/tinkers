@@ -74,6 +74,69 @@ describe('ProductCard', () => {
     expect(keychainBtn.className).toContain('bg-weeble-pink');
   });
 
+  it('updates displayed price when switching between magnet and keychain with different prices', () => {
+    const diffPriceProduct: Product = {
+      ...mockProduct,
+      price: 14.0,
+      availableVariants: ['magnet', 'keychain'],
+      variantPrices: {
+        magnet: 14.0,
+        keychain: 16.5,
+      },
+    };
+
+    render(
+      <CartProvider>
+        <ProductCard product={diffPriceProduct} />
+      </CartProvider>
+    );
+
+    expect(screen.getByText('$14.00')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /keychain/i }));
+    expect(screen.getByText('$16.50')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /magnet/i }));
+    expect(screen.getByText('$14.00')).toBeInTheDocument();
+  });
+
+  it('hides Choose Style label and magnet/keychain buttons when availableVariants is empty', () => {
+    const noVariantProduct: Product = {
+      ...mockProduct,
+      price: 15.0,
+      availableVariants: [],
+    };
+
+    render(
+      <CartProvider>
+        <ProductCard product={noVariantProduct} />
+      </CartProvider>
+    );
+
+    expect(screen.getByText('$15.00')).toBeInTheDocument();
+    expect(screen.queryByText(/Choose Style/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /magnet/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /keychain/i })).not.toBeInTheDocument();
+  });
+
+  it('renders only the available variant button when only one option exists', () => {
+    const magnetOnlyProduct: Product = {
+      ...mockProduct,
+      availableVariants: ['magnet'],
+      variantPrices: { magnet: 13.0 },
+    };
+
+    render(
+      <CartProvider>
+        <ProductCard product={magnetOnlyProduct} />
+      </CartProvider>
+    );
+
+    expect(screen.getByText('$13.00')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /magnet/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /keychain/i })).not.toBeInTheDocument();
+  });
+
   it('adds item to cart and shows transient feedback', () => {
     vi.useFakeTimers();
     render(
