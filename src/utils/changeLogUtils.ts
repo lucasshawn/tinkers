@@ -1,5 +1,5 @@
 import { Product, ChangeLogEntry, SiteSettings } from '../types';
-import { formatPrice } from './productUtils';
+import { formatPrice, getProductCategories } from './productUtils';
 
 export const CHANGES_STORAGE_KEY = 'weebles_changes_log_v1';
 
@@ -94,6 +94,7 @@ export function diffInventoryChanges(
   nowIso: string = new Date().toISOString()
 ): ChangeLogEntry[] {
   const entries: ChangeLogEntry[] = [];
+  const formatCategories = (p: Product) => getProductCategories(p).join(', ') || '(none)';
   const oldMap = new Map(oldProducts.map((p) => [p.id, p]));
   const newMap = new Map(newProducts.map((p) => [p.id, p]));
 
@@ -105,7 +106,7 @@ export function diffInventoryChanges(
         timestamp: nowIso,
         user,
         change: `Added Weeble: ${p.name}`,
-        comment: `New: Price: ${formatPrice(p.price)}, Category: ${p.category}, Stock: ${p.stockCount} (${
+        comment: `New: Price: ${formatPrice(p.price)}, Category: ${formatCategories(p)}, Stock: ${p.stockCount} (${
           p.inStock ? 'in stock' : 'sold out'
         })`,
       });
@@ -120,7 +121,7 @@ export function diffInventoryChanges(
         timestamp: nowIso,
         user,
         change: `Deleted Weeble: ${p.name}`,
-        comment: `Removed: Price: ${formatPrice(p.price)}, Category: ${p.category}, Stock: ${p.stockCount}`,
+        comment: `Removed: Price: ${formatPrice(p.price)}, Category: ${formatCategories(p)}, Stock: ${p.stockCount}`,
       });
     }
   }
@@ -136,7 +137,7 @@ export function diffInventoryChanges(
       { label: 'Name', oldVal: oldP.name, newVal: newP.name },
       { label: 'Description', oldVal: oldP.description, newVal: newP.description },
       { label: 'Price', oldVal: formatPrice(oldP.price), newVal: formatPrice(newP.price) },
-      { label: 'Category', oldVal: oldP.category, newVal: newP.category },
+      { label: 'Category', oldVal: formatCategories(oldP), newVal: formatCategories(newP) },
       { label: 'Stock Count', oldVal: String(oldP.stockCount), newVal: String(newP.stockCount) },
       { label: 'In Stock', oldVal: String(Boolean(oldP.inStock)), newVal: String(Boolean(newP.inStock)) },
       {

@@ -1,4 +1,88 @@
-import { Product, VariantType } from '../types';
+import { CategoryOption, Product, VariantType } from '../types';
+
+export const DEFAULT_CATEGORIES: CategoryOption[] = [
+  { id: 'animals', label: 'Critters', emoji: '🐰' },
+  { id: 'sweets', label: 'Sweets', emoji: '🍩' },
+  { id: 'fantasy', label: 'Fantasy', emoji: '✨' },
+  { id: 'mini-friends', label: 'Mini-Friends', emoji: '🌸' },
+];
+
+export const RESERVED_FILTER_IDS: ReadonlySet<string> = new Set([
+  'all',
+  'magnets',
+  'keychains',
+  'under-15',
+  'featured',
+]);
+
+/** Normalize a category label into a URL/filter-safe slug, avoiding reserved filter IDs. */
+export function slugifyCategoryId(label: string): string {
+  const base = label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (!base) return '';
+  if (RESERVED_FILTER_IDS.has(base)) {
+    return `${base}-category`;
+  }
+  return base;
+}
+
+/** Resolve deduplicated category IDs for a product, falling back to legacy `category`. */
+export function getProductCategories(product: Product): string[] {
+  if (Array.isArray(product.categories)) {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const raw of product.categories) {
+      if (typeof raw === 'string') {
+        const trimmed = raw.trim();
+        if (trimmed && !seen.has(trimmed)) {
+          seen.add(trimmed);
+          result.push(trimmed);
+        }
+      }
+    }
+    return result;
+  }
+  if (typeof product.category === 'string' && product.category.trim().length > 0) {
+    return [product.category.trim()];
+  }
+  return [];
+}
+
+function filterProductCategories(
+  products: Product[],
+  predicate: (id: string) => boolean
+): Product[] {
+  return products.map((product) => {
+    const nextCategories = getProductCategories(product).filter(predicate);
+    const { category: _legacyCategory, ...rest } = product;
+    return {
+      ...rest,
+      categories: nextCategories,
+    };
+  });
+}
+
+/** Remove a deleted category ID from all products and clear legacy `category`. */
+export function removeCategoryFromProducts(products: Product[], categoryId: string): Product[] {
+  return filterProductCategories(products, (id) => id !== categoryId);
+}
+
+/** Retain only category IDs present in `validCategoryIds` across all products. */
+export function pruneRemovedCategories(
+  products: Product[],
+  validCategoryIds: Set<string>
+): Product[] {
+  return filterProductCategories(products, (id) => validCategoryIds.has(id));
+}
+
+/** Format a category option for display with its optional leading emoji. */
+export function formatCategoryLabel(category: CategoryOption): string {
+  const emoji = category.emoji?.trim();
+  return emoji ? `${emoji} ${category.label}` : category.label;
+}
 
 export const PRODUCTS_STORAGE_KEY = 'weebles_products_v1';
 
@@ -99,7 +183,7 @@ export function filterProducts(products: Product[], category: string, searchQuer
     } else if (category === 'featured') {
       matchesCategory = Boolean(product.featured);
     } else {
-      matchesCategory = product.category === category;
+      matchesCategory = getProductCategories(product).includes(category);
     }
 
     // Search query match

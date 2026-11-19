@@ -12,7 +12,8 @@ export interface Product {
   price: number;
   variantPrices?: VariantPrices;
   images: string[];
-  category: 'animals' | 'sweets' | 'fantasy' | 'mini-friends';
+  categories?: string[];
+  category?: string;
   availableVariants: VariantType[];
   inStock: boolean;
   stockCount: number;
