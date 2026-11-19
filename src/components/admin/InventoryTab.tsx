@@ -155,7 +155,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs text-weeble-textMuted">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-weeble-textMuted">
                     <span className="font-bold text-weeble-pink">{formatProductPriceSummary(item)}</span>
                     <span>•</span>
                     <span>{formatItemCategories(item)}</span>

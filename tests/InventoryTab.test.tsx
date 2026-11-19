@@ -373,6 +373,7 @@ describe('InventoryTab', () => {
     render(<InventoryTab products={multiProducts} onSave={handleSave} />);
 
     expect(screen.getByText('🐰 Critters, 🍩 Sweets')).toBeInTheDocument();
+    expect(screen.getByText('🐰 Critters, 🍩 Sweets').closest('div')).toHaveClass('flex-wrap');
     expect(screen.getByText('Uncategorized')).toBeInTheDocument();
 
     const editBtns = screen.getAllByRole('button', { name: /Edit/i });
@@ -417,6 +418,62 @@ describe('InventoryTab', () => {
     rerender(<InventoryTab products={mockProducts} categories={[]} onSave={handleSave} />);
     fireEvent.click(screen.getByRole('button', { name: /\+ Add New Weeble/i }));
     expect(screen.getByText(/No categories available yet/i)).toBeInTheDocument();
+  });
+
+  it('preserves unsaved category toggles while pruning deleted IDs and renders keyboard focus-within styles', () => {
+    const initialCategories = [
+      { id: 'animals', label: 'Critters', emoji: '🐰' },
+      { id: 'sweets', label: 'Sweets', emoji: '🍩' },
+      { id: 'fantasy', label: 'Fantasy', emoji: '✨' },
+    ];
+    const { rerender } = render(
+      <InventoryTab products={mockProducts} categories={initialCategories} onSave={vi.fn()} />
+    );
+
+    const editBtns = screen.getAllByRole('button', { name: /Edit/i });
+    fireEvent.click(editBtns[0]);
+
+    const fantasyCheckbox = screen.getByRole('checkbox', { name: /Fantasy/i });
+    const fantasyLabel = fantasyCheckbox.closest('label');
+    expect(fantasyLabel).toHaveClass(
+      'focus-within:ring-2',
+      'focus-within:ring-weeble-pink',
+      'focus-within:ring-offset-1'
+    );
+
+    // Toggle Fantasy ON (unsaved edit)
+    fireEvent.click(fantasyCheckbox);
+    expect(fantasyCheckbox).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Critters/i })).toBeChecked();
+
+    // Update categories prop without removing Fantasy or Critters -> unsaved Fantasy toggle is preserved
+    rerender(
+      <InventoryTab
+        products={mockProducts}
+        categories={[
+          { id: 'animals', label: 'Critters', emoji: '🐰' },
+          { id: 'fantasy', label: 'Fantasy', emoji: '✨' },
+          { id: 'seasonal', label: 'Seasonal', emoji: '🎃' },
+        ]}
+        onSave={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('checkbox', { name: /Fantasy/i })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Critters/i })).toBeChecked();
+
+    // Remove Fantasy from available categories -> Fantasy is pruned while Critters remains checked
+    rerender(
+      <InventoryTab
+        products={mockProducts}
+        categories={[
+          { id: 'animals', label: 'Critters', emoji: '🐰' },
+          { id: 'seasonal', label: 'Seasonal', emoji: '🎃' },
+        ]}
+        onSave={vi.fn()}
+      />
+    );
+    expect(screen.queryByRole('checkbox', { name: /Fantasy/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /Critters/i })).toBeChecked();
   });
 
   it('opens Manage Categories modal and cascades deletion through onSaveCategories', async () => {

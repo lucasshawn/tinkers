@@ -151,8 +151,10 @@ export const adminApi = {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      const statusDetail = res.status ? ` (HTTP ${res.status})` : '';
-      throw new Error(data.error || `Failed to save categories${statusDetail}`);
+      const err = new Error(data.error || 'Failed to save categories') as any;
+      err.status = res.status;
+      err.endpoint = 'POST /.netlify/functions/admin-save (type=categories)';
+      throw err;
     }
 
     return res.json();

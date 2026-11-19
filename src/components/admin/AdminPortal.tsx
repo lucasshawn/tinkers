@@ -172,23 +172,21 @@ export const AdminPortal: React.FC = () => {
   ) => {
     setErrorMessage(null);
     const previousProducts = products;
-    updateSettings({
-      ...settings,
-      categories: updatedCategories,
-    });
-    if (updatedProducts) {
-      setProducts(updatedProducts);
-      saveStoredProducts(updatedProducts);
-    }
     try {
       const res = await adminApi.saveCategories(updatedCategories, updatedProducts);
+      updateSettings({
+        ...settings,
+        categories: updatedCategories,
+      });
       if (updatedProducts) {
+        setProducts(updatedProducts);
+        saveStoredProducts(updatedProducts);
         recordChanges(diffInventoryChanges(session.email, previousProducts, updatedProducts));
       }
       setNotification(res.message);
       setTimeout(() => setNotification(null), 5000);
     } catch (err: any) {
-      const errMsg = err.message || 'Failed to save categories';
+      const errMsg = err?.message || 'Failed to save categories';
       setErrorMessage(errMsg);
       recordError(
         'Save Categories',

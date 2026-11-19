@@ -58,6 +58,7 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
       setKeychainPrice(
         product ? String(product.variantPrices?.keychain ?? product.price) : '14.00'
       );
+      setSelectedCategories(resolveInitialCategories(product, categories));
       setImageUrl(product?.images[0] || '');
       setVariants(product ? product.availableVariants : ['magnet', 'keychain']);
       setInStock(product ? product.inStock : true);
@@ -68,12 +69,16 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
     }
   }, [product, isOpen]);
 
-  // Sync selected categories when product, modal visibility, or available categories change
+  // Prune removed category IDs without discarding unsaved toggles when available categories change
   useEffect(() => {
     if (isOpen) {
-      setSelectedCategories(resolveInitialCategories(product, categories));
+      const validIds = new Set(categories.map((c) => c.id));
+      setSelectedCategories((prev) => {
+        const next = prev.filter((id) => validIds.has(id));
+        return next.length === prev.length ? prev : next;
+      });
     }
-  }, [product, isOpen, categories]);
+  }, [categories, isOpen]);
 
   // Accessibility: Close on Escape key press
   useEffect(() => {
@@ -295,7 +300,7 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
                   return (
                     <label
                       key={cat.id}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border cursor-pointer transition-all ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border cursor-pointer transition-all focus-within:ring-2 focus-within:ring-weeble-pink focus-within:ring-offset-1 ${
                         checked
                           ? 'bg-weeble-pink text-white border-weeble-pink shadow-xs'
                           : 'bg-white text-weeble-text border-pink-200 hover:bg-pink-50'
