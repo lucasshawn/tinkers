@@ -1,26 +1,57 @@
-import React, { useState } from 'react';
-import { Product } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { CategoryOption, Product } from '../types';
 import { ProductCard } from './ProductCard';
-import { filterProducts } from '../utils/productUtils';
+import { DEFAULT_CATEGORIES, filterProducts, formatCategoryLabel } from '../utils/productUtils';
+import { useSettings } from '../context/SettingsContext';
 import { Search } from 'lucide-react';
 
 interface CatalogGridProps {
   products: Product[];
   onOpenCustomModal: () => void;
+  categories?: CategoryOption[];
 }
 
-const CATEGORIES = [
+const LEADING_FILTERS = [
   { id: 'all', label: '🌸 All Weebles' },
   { id: 'magnets', label: '🧲 Fridge Magnets' },
   { id: 'keychains', label: '🔑 Keychains' },
-  { id: 'animals', label: '🐰 Critters' },
-  { id: 'sweets', label: '🍩 Sweets' },
-  { id: 'under-15', label: '🎀 Under $15' },
 ];
 
-export const CatalogGrid: React.FC<CatalogGridProps> = ({ products, onOpenCustomModal }) => {
+const TRAILING_FILTERS = [{ id: 'under-15', label: '🎀 Under $15' }];
+
+const BUILTIN_FILTER_IDS = new Set([
+  ...LEADING_FILTERS.map((f) => f.id),
+  ...TRAILING_FILTERS.map((f) => f.id),
+]);
+
+export const CatalogGrid: React.FC<CatalogGridProps> = ({
+  products,
+  onOpenCustomModal,
+  categories,
+}) => {
+  const { settings } = useSettings();
+  const activeCategories = categories ?? settings.categories ?? DEFAULT_CATEGORIES;
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (BUILTIN_FILTER_IDS.has(selectedCategory)) return;
+    if (!activeCategories.some((c) => c.id === selectedCategory)) {
+      setSelectedCategory('all');
+    }
+  }, [activeCategories, selectedCategory]);
+
+  const filterChips = useMemo(
+    () => [
+      ...LEADING_FILTERS,
+      ...activeCategories.map((cat) => ({
+        id: cat.id,
+        label: formatCategoryLabel(cat),
+      })),
+      ...TRAILING_FILTERS,
+    ],
+    [activeCategories]
+  );
 
   const filtered = filterProducts(products, selectedCategory, searchQuery);
 
@@ -52,7 +83,7 @@ export const CatalogGrid: React.FC<CatalogGridProps> = ({ products, onOpenCustom
 
       {/* Filter Chips */}
       <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-8 scrollbar-none">
-        {CATEGORIES.map((cat) => (
+        {filterChips.map((cat) => (
           <button
             key={cat.id}
             onClick={() => setSelectedCategory(cat.id)}
