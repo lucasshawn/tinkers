@@ -5,7 +5,7 @@ export interface AdminsTabProps {
   admins: string[];
   currentAdminEmail: string;
   onSave: (updatedAdmins: string[]) => Promise<void>;
-  onLogError?: (action: string, attemptedValue: string, errorMessage: string) => void;
+  onLogError?: (action: string, attemptedValue: string, errorOrMessage: unknown) => void;
 }
 
 export const AdminsTab: React.FC<AdminsTabProps> = ({

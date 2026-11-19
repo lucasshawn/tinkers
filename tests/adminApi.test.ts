@@ -777,10 +777,9 @@ describe('adminApi client service', () => {
       {
         id: 'chg-1',
         timestamp: '2026-11-18T17:45:00.000Z',
-        who: 'lucasshawn@gmail.com',
-        what: 'Admin Whitelist - Added Admin',
-        oldValue: '(not authorized)',
-        newValue: 'new@weebles.com',
+        user: 'lucasshawn@gmail.com',
+        change: 'Admin Whitelist - Added Admin',
+        comment: 'Old: (not authorized) -> New: new@weebles.com',
       },
     ];
 

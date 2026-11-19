@@ -51,7 +51,7 @@ describe('changeLogUtils', () => {
   });
 
   describe('diffInventoryChanges', () => {
-    it('logs a single entry when a new product is added', () => {
+    it('logs a single entry with Comment when a new product is added', () => {
       const added: Product = {
         ...baseProduct,
         id: 'weeble-macaron',
@@ -66,26 +66,24 @@ describe('changeLogUtils', () => {
       expect(entries).toHaveLength(1);
       expect(entries[0]).toMatchObject({
         timestamp: fixedNow,
-        who: adminEmail,
-        what: 'Added Weeble: Strawberry Macaron',
-        oldValue: '(none)',
-        newValue: 'Price: $16.50, Category: sweets, Stock: 5 (in stock)',
+        user: adminEmail,
+        change: 'Added Weeble: Strawberry Macaron',
+        comment: 'New: Price: $16.50, Category: sweets, Stock: 5 (in stock)',
       });
     });
 
-    it('logs a single entry when a product is deleted', () => {
+    it('logs a single entry with Comment when a product is deleted', () => {
       const entries = diffInventoryChanges(adminEmail, [baseProduct], [], fixedNow);
       expect(entries).toHaveLength(1);
       expect(entries[0]).toMatchObject({
         timestamp: fixedNow,
-        who: adminEmail,
-        what: 'Deleted Weeble: Chubby Bumblebee',
-        oldValue: 'Price: $14.00, Category: animals, Stock: 3',
-        newValue: '(deleted)',
+        user: adminEmail,
+        change: 'Deleted Weeble: Chubby Bumblebee',
+        comment: 'Removed: Price: $14.00, Category: animals, Stock: 3',
       });
     });
 
-    it('logs one row per changed field when an existing product is edited', () => {
+    it('logs one row per changed field with Old/New in Comment when an existing product is edited', () => {
       const updatedProduct: Product = {
         ...baseProduct,
         price: 18,
@@ -96,26 +94,22 @@ describe('changeLogUtils', () => {
 
       const entries = diffInventoryChanges(adminEmail, [baseProduct], [updatedProduct], fixedNow);
       expect(entries).toHaveLength(4);
-      expect(entries.map((e) => ({ what: e.what, oldValue: e.oldValue, newValue: e.newValue }))).toEqual([
+      expect(entries.map((e) => ({ change: e.change, comment: e.comment }))).toEqual([
         {
-          what: "Weeble 'Chubby Bumblebee' - Description",
-          oldValue: 'Handmade bee charm',
-          newValue: 'Updated description',
+          change: "Weeble 'Chubby Bumblebee' - Description",
+          comment: 'Old: Handmade bee charm -> New: Updated description',
         },
         {
-          what: "Weeble 'Chubby Bumblebee' - Price",
-          oldValue: '$14.00',
-          newValue: '$18.00',
+          change: "Weeble 'Chubby Bumblebee' - Price",
+          comment: 'Old: $14.00 -> New: $18.00',
         },
         {
-          what: "Weeble 'Chubby Bumblebee' - Stock Count",
-          oldValue: '3',
-          newValue: '0',
+          change: "Weeble 'Chubby Bumblebee' - Stock Count",
+          comment: 'Old: 3 -> New: 0',
         },
         {
-          what: "Weeble 'Chubby Bumblebee' - In Stock",
-          oldValue: 'true',
-          newValue: 'false',
+          change: "Weeble 'Chubby Bumblebee' - In Stock",
+          comment: 'Old: true -> New: false',
         },
       ]);
     });
@@ -126,7 +120,7 @@ describe('changeLogUtils', () => {
   });
 
   describe('diffSettingsChanges', () => {
-    it('logs one row per modified site setting field', () => {
+    it('logs one row per modified site setting field with Old/New in Comment', () => {
       const updated: SiteSettings = {
         ...baseSettings,
         contactEmail: 'newcontact@weebles.com',
@@ -142,33 +136,29 @@ describe('changeLogUtils', () => {
 
       const entries = diffSettingsChanges(adminEmail, baseSettings, updated, fixedNow);
       expect(entries).toHaveLength(4);
-      expect(entries.map((e) => ({ what: e.what, oldValue: e.oldValue, newValue: e.newValue }))).toEqual([
+      expect(entries.map((e) => ({ change: e.change, comment: e.comment }))).toEqual([
         {
-          what: 'Site Content - Announcement Banner Enabled',
-          oldValue: 'false',
-          newValue: 'true',
+          change: 'Site Content - Announcement Banner Enabled',
+          comment: 'Old: false -> New: true',
         },
         {
-          what: 'Site Content - Announcement Banner Text',
-          oldValue: 'Fall restock!',
-          newValue: 'Winter drop live!',
+          change: 'Site Content - Announcement Banner Text',
+          comment: 'Old: Fall restock! -> New: Winter drop live!',
         },
         {
-          what: 'Site Content - General Contact Email',
-          oldValue: 'hello@weebles.com',
-          newValue: 'newcontact@weebles.com',
+          change: 'Site Content - General Contact Email',
+          comment: 'Old: hello@weebles.com -> New: newcontact@weebles.com',
         },
         {
-          what: 'Site Content - Instagram URL',
-          oldValue: 'https://instagram.com/weebles',
-          newValue: 'https://instagram.com/weebles_new',
+          change: 'Site Content - Instagram URL',
+          comment: 'Old: https://instagram.com/weebles -> New: https://instagram.com/weebles_new',
         },
       ]);
     });
   });
 
   describe('diffAdminsChanges', () => {
-    it('logs added and removed admins', () => {
+    it('logs added and removed admins in Comment', () => {
       const addedEntries = diffAdminsChanges(
         adminEmail,
         ['lucasshawn@gmail.com'],
@@ -177,10 +167,9 @@ describe('changeLogUtils', () => {
       );
       expect(addedEntries).toHaveLength(1);
       expect(addedEntries[0]).toMatchObject({
-        who: adminEmail,
-        what: 'Admin Whitelist - Added Admin',
-        oldValue: '(not authorized)',
-        newValue: 'friend@gmail.com',
+        user: adminEmail,
+        change: 'Admin Whitelist - Added Admin',
+        comment: 'Old: (not authorized) -> New: friend@gmail.com',
       });
 
       const removedEntries = diffAdminsChanges(
@@ -191,30 +180,33 @@ describe('changeLogUtils', () => {
       );
       expect(removedEntries).toHaveLength(1);
       expect(removedEntries[0]).toMatchObject({
-        who: adminEmail,
-        what: 'Admin Whitelist - Removed Admin',
-        oldValue: 'friend@gmail.com',
-        newValue: '(removed)',
+        user: adminEmail,
+        change: 'Admin Whitelist - Removed Admin',
+        comment: 'Old: friend@gmail.com -> New: (removed)',
       });
     });
   });
 
   describe('createErrorLogEntry & describeInventoryAttempt', () => {
-    it('creates a standardized error log entry', () => {
+    it('creates a diagnostic error log entry with error message, context, endpoint/status, and stack info', () => {
+      const err = new Error('Backend Error: Payload Too Large (413)') as any;
+      err.status = 413;
+      err.endpoint = 'POST /.netlify/functions/admin-save';
+
       const entry = createErrorLogEntry(
         adminEmail,
         'Save Inventory',
-        'Deleted Weeble: Chubby Bumblebee',
-        'Backend Error: Payload Too Large (413)',
+        'Delete Weeble: Chubby Bumblebee',
+        err,
         fixedNow
       );
-      expect(entry).toMatchObject({
-        timestamp: fixedNow,
-        who: adminEmail,
-        what: 'Error: Save Inventory',
-        oldValue: 'Deleted Weeble: Chubby Bumblebee',
-        newValue: 'ERROR: Backend Error: Payload Too Large (413)',
-      });
+      expect(entry.timestamp).toBe(fixedNow);
+      expect(entry.user).toBe(adminEmail);
+      expect(entry.change).toBe('Error: Save Inventory');
+      expect(entry.comment).toContain('ERROR: Backend Error: Payload Too Large (413)');
+      expect(entry.comment).toContain('Context: Delete Weeble: Chubby Bumblebee');
+      expect(entry.comment).toContain('Endpoint: POST /.netlify/functions/admin-save (HTTP 413)');
+      expect(entry.comment).toContain('Stack:');
     });
 
     it('describes inventory attempt for add, delete, and edit', () => {

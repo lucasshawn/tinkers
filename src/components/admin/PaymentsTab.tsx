@@ -16,7 +16,7 @@ import { adminPayments } from '../../services/adminPayments';
 import { PaymentsResponse } from '../../types/payments';
 
 export interface PaymentsTabProps {
-  onLogError?: (action: string, attemptedValue: string, errorMessage: string) => void;
+  onLogError?: (action: string, attemptedValue: string, errorOrMessage: unknown) => void;
 }
 
 export const PaymentsTab: React.FC<PaymentsTabProps> = ({ onLogError }) => {
@@ -33,7 +33,7 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({ onLogError }) => {
     } catch (err: any) {
       const errMsg = err.message || 'Failed to load payments data';
       setError(errMsg);
-      onLogError?.('Load Payments', 'Stripe payments sync', errMsg);
+      onLogError?.('Load Payments', 'Stripe payments sync', err);
     } finally {
       setLoading(false);
     }

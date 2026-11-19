@@ -79,8 +79,8 @@ export const AdminPortal: React.FC = () => {
     adminApi.saveChanges(newEntries).catch(() => {});
   };
 
-  const recordError = (action: string, attemptedValue: string, errMsg: string) => {
-    const entry = createErrorLogEntry(session.email, action, attemptedValue, errMsg);
+  const recordError = (action: string, attemptedValue: string, errorOrMessage: unknown) => {
+    const entry = createErrorLogEntry(session.email, action, attemptedValue, errorOrMessage);
     recordChanges([entry]);
   };
 
@@ -115,7 +115,7 @@ export const AdminPortal: React.FC = () => {
     } catch (err: any) {
       const errMsg = err.message || 'Failed to save inventory';
       setErrorMessage(errMsg);
-      recordError('Save Inventory', describeInventoryAttempt(previousProducts, updated), errMsg);
+      recordError('Save Inventory', describeInventoryAttempt(previousProducts, updated), err);
     }
   };
 
@@ -132,7 +132,7 @@ export const AdminPortal: React.FC = () => {
     } catch (err: any) {
       const errMsg = err.message || 'Failed to save settings';
       setErrorMessage(errMsg);
-      recordError('Save Site Content', 'Site settings update', errMsg);
+      recordError('Save Site Content', 'Site settings update', err);
     }
   };
 
@@ -152,7 +152,7 @@ export const AdminPortal: React.FC = () => {
     } catch (err: any) {
       const errMsg = err.message || 'Failed to save admin whitelist';
       setErrorMessage(errMsg);
-      recordError('Save Admin Whitelist', updatedAdmins.join(', '), errMsg);
+      recordError('Save Admin Whitelist', updatedAdmins.join(', '), err);
     }
   };
 

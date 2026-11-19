@@ -3,7 +3,11 @@ import { SiteSettings } from '../types/settings';
 import { adminAuth } from './adminAuth';
 
 export const adminApi = {
-  async loadStoreData(): Promise<{ products?: Product[]; settings?: SiteSettings; changes?: ChangeLogEntry[] } | null> {
+  async loadStoreData(): Promise<{
+    products?: Product[];
+    settings?: SiteSettings;
+    changes?: ChangeLogEntry[];
+  } | null> {
     try {
       const res = await fetch('/.netlify/functions/admin-save?action=load', {
         method: 'GET',
@@ -38,8 +42,10 @@ export const adminApi = {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      const statusDetail = res.status ? ` (HTTP ${res.status})` : '';
-      throw new Error(data.error || `Failed to save inventory${statusDetail}`);
+      const err = new Error(data.error || 'Failed to save inventory') as any;
+      err.status = res.status;
+      err.endpoint = 'POST /.netlify/functions/admin-save (type=inventory)';
+      throw err;
     }
 
     return res.json();
@@ -63,8 +69,10 @@ export const adminApi = {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      const statusDetail = res.status ? ` (HTTP ${res.status})` : '';
-      throw new Error(data.error || `Failed to save settings${statusDetail}`);
+      const err = new Error(data.error || 'Failed to save settings') as any;
+      err.status = res.status;
+      err.endpoint = 'POST /.netlify/functions/admin-save (type=settings)';
+      throw err;
     }
 
     return res.json();
@@ -88,8 +96,10 @@ export const adminApi = {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      const statusDetail = res.status ? ` (HTTP ${res.status})` : '';
-      throw new Error(data.error || `Failed to save admin whitelist${statusDetail}`);
+      const err = new Error(data.error || 'Failed to save admin whitelist') as any;
+      err.status = res.status;
+      err.endpoint = 'POST /.netlify/functions/admin-save (type=admins)';
+      throw err;
     }
 
     return res.json();

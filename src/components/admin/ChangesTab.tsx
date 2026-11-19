@@ -7,7 +7,7 @@ export interface ChangesTabProps {
   changes: ChangeLogEntry[];
 }
 
-type SortField = 'timestamp' | 'who' | 'what' | 'oldValue' | 'newValue';
+type SortField = 'timestamp' | 'user' | 'change' | 'comment';
 type SortDirection = 'asc' | 'desc';
 
 export const ChangesTab: React.FC<ChangesTabProps> = ({ changes }) => {
@@ -58,11 +58,10 @@ export const ChangesTab: React.FC<ChangesTabProps> = ({ changes }) => {
   };
 
   const columns: Array<{ field: SortField; label: string }> = [
-    { field: 'timestamp', label: 'When' },
-    { field: 'who', label: 'Who' },
-    { field: 'what', label: 'What' },
-    { field: 'oldValue', label: 'Old' },
-    { field: 'newValue', label: 'New' },
+    { field: 'timestamp', label: 'Time' },
+    { field: 'user', label: 'User' },
+    { field: 'change', label: 'Change' },
+    { field: 'comment', label: 'Comment' },
   ];
 
   return (
@@ -115,7 +114,7 @@ export const ChangesTab: React.FC<ChangesTabProps> = ({ changes }) => {
             <tbody className="divide-y divide-pink-100 text-xs">
               {sortedChanges.map((entry) => {
                 const isError =
-                  entry.what.startsWith('Error:') || entry.newValue.startsWith('ERROR:');
+                  entry.change.startsWith('Error:') || entry.comment.startsWith('ERROR:');
                 return (
                   <tr
                     key={entry.id}
@@ -130,27 +129,24 @@ export const ChangesTab: React.FC<ChangesTabProps> = ({ changes }) => {
                       {formatLocalTimestamp(entry.timestamp)}
                     </td>
                     <td className="py-3 px-4 font-semibold text-weeble-text whitespace-nowrap">
-                      {entry.who}
+                      {entry.user}
                     </td>
                     <td className="py-3 px-4 font-semibold whitespace-nowrap">
                       {isError ? (
                         <span className="inline-flex items-center gap-1 text-rose-700">
                           <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                          <span>{entry.what}</span>
+                          <span>{entry.change}</span>
                         </span>
                       ) : (
-                        <span className="text-weeble-text">{entry.what}</span>
+                        <span className="text-weeble-text">{entry.change}</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-neutral-600 break-words max-w-xs">
-                      {entry.oldValue}
-                    </td>
                     <td
-                      className={`py-3 px-4 break-words max-w-xs font-medium ${
-                        isError ? 'text-rose-700 font-bold' : 'text-weeble-text'
+                      className={`py-3 px-4 break-words max-w-xl font-medium ${
+                        isError ? 'text-rose-700 font-bold font-mono text-[11px]' : 'text-neutral-700'
                       }`}
                     >
-                      {entry.newValue}
+                      {entry.comment}
                     </td>
                   </tr>
                 );

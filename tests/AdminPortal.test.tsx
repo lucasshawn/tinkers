@@ -282,7 +282,7 @@ describe('AdminPortal', () => {
     // Switch to Changes tab and verify log row
     fireEvent.click(screen.getByRole('button', { name: /Changes/i }));
     expect(screen.getByText('Admin Whitelist - Added Admin')).toBeInTheDocument();
-    expect(screen.getByText('logger@weebles.com')).toBeInTheDocument();
+    expect(screen.getByText(/Old: \(not authorized\) -> New: logger@weebles\.com/i)).toBeInTheDocument();
   });
 
   it('logs errors in the Changes tab when an admin action or save fails', async () => {
@@ -315,10 +315,11 @@ describe('AdminPortal', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /Add Admin/i }));
 
-    // Open Changes tab and verify both errors are logged
+    // Open Changes tab and verify both errors are logged with diagnostic context
     fireEvent.click(screen.getByRole('button', { name: /Changes/i }));
     expect(screen.getByText('Error: Save Inventory')).toBeInTheDocument();
-    expect(screen.getByText('ERROR: GitHub API 500 error')).toBeInTheDocument();
+    expect(screen.getByText(/ERROR: GitHub API 500 error/i)).toBeInTheDocument();
+    expect(screen.getByText(/Context: Delete Weeble:/i)).toBeInTheDocument();
     expect(screen.getByText('Error: Add Admin')).toBeInTheDocument();
     expect(screen.getByText(/ERROR: Please enter a valid email address/i)).toBeInTheDocument();
   });

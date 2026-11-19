@@ -10,12 +10,36 @@ function makeId(nowIso: string, suffix: string): string {
   return `chg-${Date.parse(nowIso) || Date.now()}-${idCounter}-${suffix}`;
 }
 
+function normalizeEntry(raw: any): ChangeLogEntry | null {
+  if (!raw || typeof raw !== 'object' || typeof raw.id !== 'string') return null;
+  const user = typeof raw.user === 'string' ? raw.user : typeof raw.who === 'string' ? raw.who : '';
+  const change =
+    typeof raw.change === 'string' ? raw.change : typeof raw.what === 'string' ? raw.what : '';
+  let comment = '';
+  if (typeof raw.comment === 'string') {
+    comment = raw.comment;
+  } else if (typeof raw.oldValue === 'string' || typeof raw.newValue === 'string') {
+    const oldV = raw.oldValue ?? '';
+    const newV = raw.newValue ?? '';
+    comment = oldV && oldV !== '-' ? `Old: ${oldV} -> New: ${newV}` : String(newV);
+  }
+  return {
+    id: raw.id,
+    timestamp: typeof raw.timestamp === 'string' ? raw.timestamp : new Date().toISOString(),
+    user,
+    change,
+    comment,
+  };
+}
+
 export function getStoredChanges(defaults: ChangeLogEntry[] = []): ChangeLogEntry[] {
   try {
     const raw = localStorage.getItem(CHANGES_STORAGE_KEY);
     if (!raw) return defaults;
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed)) {
+      return parsed.map(normalizeEntry).filter((e): e is ChangeLogEntry => e !== null);
+    }
   } catch {}
   return defaults;
 }
@@ -31,8 +55,9 @@ export function mergeChanges(
   incoming: ChangeLogEntry[]
 ): ChangeLogEntry[] {
   const byId = new Map<string, ChangeLogEntry>();
-  for (const item of [...incoming, ...existing]) {
-    if (item && typeof item.id === 'string' && !byId.has(item.id)) {
+  for (const rawItem of [...incoming, ...existing]) {
+    const item = normalizeEntry(rawItem);
+    if (item && !byId.has(item.id)) {
       byId.set(item.id, item);
     }
   }
@@ -63,7 +88,7 @@ function summarizeImage(img?: string): string {
 }
 
 export function diffInventoryChanges(
-  who: string,
+  user: string,
   oldProducts: Product[],
   newProducts: Product[],
   nowIso: string = new Date().toISOString()
@@ -78,10 +103,9 @@ export function diffInventoryChanges(
       entries.push({
         id: makeId(nowIso, `add-${p.id}`),
         timestamp: nowIso,
-        who,
-        what: `Added Weeble: ${p.name}`,
-        oldValue: '(none)',
-        newValue: `Price: ${formatPrice(p.price)}, Category: ${p.category}, Stock: ${p.stockCount} (${
+        user,
+        change: `Added Weeble: ${p.name}`,
+        comment: `New: Price: ${formatPrice(p.price)}, Category: ${p.category}, Stock: ${p.stockCount} (${
           p.inStock ? 'in stock' : 'sold out'
         })`,
       });
@@ -94,10 +118,9 @@ export function diffInventoryChanges(
       entries.push({
         id: makeId(nowIso, `del-${p.id}`),
         timestamp: nowIso,
-        who,
-        what: `Deleted Weeble: ${p.name}`,
-        oldValue: `Price: ${formatPrice(p.price)}, Category: ${p.category}, Stock: ${p.stockCount}`,
-        newValue: '(deleted)',
+        user,
+        change: `Deleted Weeble: ${p.name}`,
+        comment: `Removed: Price: ${formatPrice(p.price)}, Category: ${p.category}, Stock: ${p.stockCount}`,
       });
     }
   }
@@ -143,10 +166,9 @@ export function diffInventoryChanges(
         entries.push({
           id: makeId(nowIso, `edit-${newP.id}-${cmp.label.toLowerCase().replace(/\s+/g, '-')}`),
           timestamp: nowIso,
-          who,
-          what: `${labelPrefix} - ${cmp.label}`,
-          oldValue: cmp.oldVal,
-          newValue: cmp.newVal,
+          user,
+          change: `${labelPrefix} - ${cmp.label}`,
+          comment: `Old: ${cmp.oldVal} -> New: ${cmp.newVal}`,
         });
       }
     }
@@ -156,7 +178,7 @@ export function diffInventoryChanges(
 }
 
 export function diffSettingsChanges(
-  who: string,
+  user: string,
   oldSettings: SiteSettings,
   newSettings: SiteSettings,
   nowIso: string = new Date().toISOString()
@@ -206,10 +228,9 @@ export function diffSettingsChanges(
       entries.push({
         id: makeId(nowIso, cmp.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')),
         timestamp: nowIso,
-        who,
-        what: cmp.label,
-        oldValue: cmp.oldVal,
-        newValue: cmp.newVal,
+        user,
+        change: cmp.label,
+        comment: `Old: ${cmp.oldVal} -> New: ${cmp.newVal}`,
       });
     }
   }
@@ -218,7 +239,7 @@ export function diffSettingsChanges(
 }
 
 export function diffAdminsChanges(
-  who: string,
+  user: string,
   oldAdmins: string[],
   newAdmins: string[],
   nowIso: string = new Date().toISOString()
@@ -232,10 +253,9 @@ export function diffAdminsChanges(
       entries.push({
         id: makeId(nowIso, `admin-add-${email}`),
         timestamp: nowIso,
-        who,
-        what: 'Admin Whitelist - Added Admin',
-        oldValue: '(not authorized)',
-        newValue: email,
+        user,
+        change: 'Admin Whitelist - Added Admin',
+        comment: `Old: (not authorized) -> New: ${email}`,
       });
     }
   }
@@ -245,10 +265,9 @@ export function diffAdminsChanges(
       entries.push({
         id: makeId(nowIso, `admin-rem-${email}`),
         timestamp: nowIso,
-        who,
-        what: 'Admin Whitelist - Removed Admin',
-        oldValue: email,
-        newValue: '(removed)',
+        user,
+        change: 'Admin Whitelist - Removed Admin',
+        comment: `Old: ${email} -> New: (removed)`,
       });
     }
   }
@@ -257,19 +276,60 @@ export function diffAdminsChanges(
 }
 
 export function createErrorLogEntry(
-  who: string,
+  user: string,
   action: string,
-  attemptedValue: string,
-  errorMessage: string,
+  attemptedContext: string,
+  errorOrMessage: unknown,
   nowIso: string = new Date().toISOString()
 ): ChangeLogEntry {
+  let errorMessage = 'Unknown error';
+  let statusInfo = '';
+  let endpointInfo = '';
+  let stackSnippet = '';
+
+  if (typeof errorOrMessage === 'string') {
+    errorMessage = errorOrMessage;
+  } else if (errorOrMessage && typeof errorOrMessage === 'object') {
+    const errObj = errorOrMessage as any;
+    if (typeof errObj.message === 'string' && errObj.message) {
+      errorMessage = errObj.message;
+    }
+    if (errObj.endpoint) {
+      endpointInfo = String(errObj.endpoint);
+    }
+    if (errObj.status) {
+      statusInfo = `HTTP ${errObj.status}`;
+    }
+    if (typeof errObj.stack === 'string' && errObj.stack) {
+      const stackLines = errObj.stack
+        .split('\n')
+        .map((l: string) => l.trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      if (stackLines.length > 0) {
+        stackSnippet = stackLines.join(' <- ');
+      }
+    }
+  }
+
+  const parts: string[] = [`ERROR: ${errorMessage}`];
+  if (attemptedContext && attemptedContext !== '-') {
+    parts.push(`Context: ${attemptedContext}`);
+  }
+  if (endpointInfo || statusInfo) {
+    const ep = [endpointInfo, statusInfo ? `(${statusInfo})` : ''].filter(Boolean).join(' ');
+    parts.push(`Endpoint: ${ep}`);
+  }
+  if (stackSnippet) {
+    parts.push(`Stack: ${stackSnippet}`);
+  }
+
   return {
     id: makeId(nowIso, `err-${action.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`),
     timestamp: nowIso,
-    who,
-    what: `Error: ${action}`,
-    oldValue: attemptedValue || '-',
-    newValue: `ERROR: ${errorMessage}`,
+    user,
+    change: `Error: ${action}`,
+    comment: parts.join(' | '),
   };
 }
 
