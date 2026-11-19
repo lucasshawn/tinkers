@@ -576,6 +576,94 @@ describe('admin-save Netlify Function', () => {
       expect.stringContaining('Strawberry Macaron')
     );
   });
+
+  it('saves categories and cascades removal onto products when type is categories', async () => {
+    const updatedCategories = [{ id: 'animals', label: 'Critters', emoji: '🐰' }];
+    const productsWithRemovedCat: Product[] = [
+      {
+        id: 'p1',
+        name: 'Sweet Bunny',
+        description: 'Bunny holding donut',
+        price: 14,
+        images: ['/images/products/bunny.jpg'],
+        categories: ['animals', 'sweets'],
+        availableVariants: ['magnet'],
+        inStock: true,
+        stockCount: 2,
+      },
+      {
+        id: 'p2',
+        name: 'Donut Charm',
+        description: 'Glazed donut',
+        price: 13,
+        images: ['/images/products/donut.jpg'],
+        categories: ['sweets'],
+        availableVariants: ['keychain'],
+        inStock: true,
+        stockCount: 1,
+      },
+    ];
+
+    const event = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'categories',
+        categories: updatedCategories,
+        products: productsWithRemovedCat,
+      }),
+    };
+
+    const res = (await handler(event as any, {} as any)) as any;
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.success).toBe(true);
+
+    const writeCalls = (fs.writeFileSync as any).mock.calls;
+    const settingsCall = writeCalls.find((c: any[]) => String(c[0]).includes('settings.json'));
+    const productsCall = writeCalls.find((c: any[]) => String(c[0]).includes('products.json'));
+
+    expect(settingsCall).toBeDefined();
+    expect(JSON.parse(settingsCall[1]).categories).toEqual(updatedCategories);
+
+    expect(productsCall).toBeDefined();
+    const writtenProducts = JSON.parse(productsCall[1]);
+    expect(writtenProducts[0].categories).toEqual(['animals']);
+    expect(writtenProducts[1].categories).toEqual([]);
+  });
+
+  it('preserves existing categories when saving settings without a categories property', async () => {
+    const existingSettings = {
+      contactEmail: 'old@weebles.com',
+      customOrderEmail: 'old@weebles.com',
+      socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+      admins: ['lucasshawn@gmail.com'],
+      categories: [{ id: 'seasonal', label: 'Seasonal', emoji: '🎄' }],
+    };
+    vi.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify(existingSettings));
+
+    const event = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'settings',
+        settings: {
+          contactEmail: 'new@weebles.com',
+          customOrderEmail: 'new@weebles.com',
+          socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+        },
+      }),
+    };
+
+    const res = (await handler(event as any, {} as any)) as any;
+    expect(res.statusCode).toBe(200);
+
+    const writeCalls = (fs.writeFileSync as any).mock.calls;
+    const settingsCall = writeCalls.find((c: any[]) => String(c[0]).includes('settings.json'));
+    expect(JSON.parse(settingsCall[1]).categories).toEqual([
+      { id: 'seasonal', label: 'Seasonal', emoji: '🎄' },
+    ]);
+  });
 });
 
 describe('adminApi client service', () => {
@@ -796,6 +884,44 @@ describe('adminApi client service', () => {
         body: JSON.stringify({
           type: 'changes',
           changes: entries,
+        }),
+      })
+    );
+  });
+
+  it('saveCategories throws error when not authenticated', async () => {
+    await expect(
+      adminApi.saveCategories([{ id: 'animals', label: 'Critters', emoji: '🐰' }])
+    ).rejects.toThrow(/not authenticated/i);
+  });
+
+  it('saveCategories posts categories and optional products with session Bearer token', async () => {
+    adminAuth.setSession({
+      token: 'cat-token',
+      email: 'lucasshawn@gmail.com',
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, message: 'Categories saved!' }),
+    });
+    globalThis.fetch = mockFetch;
+
+    const cats = [{ id: 'animals', label: 'Critters', emoji: '🐰' }];
+    const result = await adminApi.saveCategories(cats, mockProducts);
+    expect(result.success).toBe(true);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/.netlify/functions/admin-save',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer cat-token',
+        },
+        body: JSON.stringify({
+          type: 'categories',
+          categories: cats,
+          products: mockProducts,
         }),
       })
     );
