@@ -323,4 +323,73 @@ describe('AdminPortal', () => {
     expect(screen.getByText('Error: Add Admin')).toBeInTheDocument();
     expect(screen.getByText(/ERROR: Please enter a valid email address/i)).toBeInTheDocument();
   });
+
+  it('adds and removes categories in Manage Catalog and removes deleted category from catalog items', async () => {
+    adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
+    vi.spyOn(adminApi, 'saveCategories').mockResolvedValue({
+      success: true,
+      message: 'Categories saved locally (Dev Mode).',
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(
+      <SettingsProvider>
+        <AdminPortal />
+      </SettingsProvider>
+    );
+
+    // Open Manage Categories modal
+    fireEvent.click(screen.getByRole('button', { name: /Manage Categories/i }));
+
+    // Add a new category
+    fireEvent.change(screen.getByLabelText(/Emoji/i), { target: { value: '🎀' } });
+    fireEvent.change(screen.getByLabelText(/Category Name/i), { target: { value: 'Limited Drops' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add Category/i }));
+
+    await waitFor(() => {
+      expect(adminApi.saveCategories).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByText('🎀 Limited Drops')).toBeInTheDocument();
+
+    // Remove 'Critters' (animals) -> should cascade cleanup to Bumblebee & other animals
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Critters' }));
+
+    await waitFor(() => {
+      expect(adminApi.saveCategories).toHaveBeenCalledTimes(2);
+    });
+
+    const [savedCategories, savedProducts] = (adminApi.saveCategories as any).mock.calls[1];
+    expect(savedCategories.some((c: any) => c.id === 'animals')).toBe(false);
+    expect(
+      savedProducts.every((p: any) => !(p.categories || []).includes('animals'))
+    ).toBe(true);
+  });
+
+  it('logs an error in Changes tab and shows error alert when saveCategories fails', async () => {
+    adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
+    vi.spyOn(adminApi, 'saveCategories').mockRejectedValue(new Error('Category save failed (500)'));
+    vi.spyOn(adminApi, 'saveChanges').mockResolvedValue({
+      success: true,
+      message: 'Change log saved.',
+    });
+
+    render(
+      <SettingsProvider>
+        <AdminPortal />
+      </SettingsProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Manage Categories/i }));
+    fireEvent.change(screen.getByLabelText(/Category Name/i), { target: { value: 'Holiday' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add Category/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Category save failed \(500\)/i).length).toBeGreaterThanOrEqual(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Close modal/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Changes/i }));
+    expect(screen.getByText('Error: Save Categories')).toBeInTheDocument();
+    expect(screen.getByText(/ERROR: Category save failed \(500\)/i)).toBeInTheDocument();
+  });
 });

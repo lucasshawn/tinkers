@@ -8,12 +8,17 @@ import { InventoryTab } from './InventoryTab';
 import { PaymentsTab } from './PaymentsTab';
 import { ContentTab } from './ContentTab';
 import { ChangesTab } from './ChangesTab';
-import { useSettings } from '../../context/SettingsContext';
+import { useSettings, SETTINGS_STORAGE_KEY } from '../../context/SettingsContext';
 import initialProductsData from '../../data/products.json';
 import initialChangesData from '../../data/changes.json';
 import { Product, ChangeLogEntry } from '../../types';
-import { SiteSettings } from '../../types/settings';
-import { getStoredProducts, saveStoredProducts, PRODUCTS_STORAGE_KEY } from '../../utils/productUtils';
+import { CategoryOption, SiteSettings } from '../../types/settings';
+import {
+  DEFAULT_CATEGORIES,
+  getStoredProducts,
+  saveStoredProducts,
+  PRODUCTS_STORAGE_KEY,
+} from '../../utils/productUtils';
 import {
   getStoredChanges,
   saveStoredChanges,
@@ -49,6 +54,9 @@ export const AdminPortal: React.FC = () => {
       if (!localStorage.getItem(PRODUCTS_STORAGE_KEY) && data?.products && Array.isArray(data.products)) {
         setProducts(data.products);
         saveStoredProducts(data.products);
+      }
+      if (!localStorage.getItem(SETTINGS_STORAGE_KEY) && data?.settings && typeof data.settings === 'object') {
+        updateSettings(data.settings);
       }
       if (data?.changes && Array.isArray(data.changes)) {
         setChanges((prev) => {
@@ -153,6 +161,41 @@ export const AdminPortal: React.FC = () => {
       const errMsg = err.message || 'Failed to save admin whitelist';
       setErrorMessage(errMsg);
       recordError('Save Admin Whitelist', updatedAdmins.join(', '), err);
+    }
+  };
+
+  const categories = settings.categories ?? DEFAULT_CATEGORIES;
+
+  const handleSaveCategories = async (
+    updatedCategories: CategoryOption[],
+    updatedProducts?: Product[]
+  ) => {
+    setErrorMessage(null);
+    const previousProducts = products;
+    updateSettings({
+      ...settings,
+      categories: updatedCategories,
+    });
+    if (updatedProducts) {
+      setProducts(updatedProducts);
+      saveStoredProducts(updatedProducts);
+    }
+    try {
+      const res = await adminApi.saveCategories(updatedCategories, updatedProducts);
+      if (updatedProducts) {
+        recordChanges(diffInventoryChanges(session.email, previousProducts, updatedProducts));
+      }
+      setNotification(res.message);
+      setTimeout(() => setNotification(null), 5000);
+    } catch (err: any) {
+      const errMsg = err.message || 'Failed to save categories';
+      setErrorMessage(errMsg);
+      recordError(
+        'Save Categories',
+        updatedCategories.map((c) => c.label).join(', '),
+        err && typeof err === 'object' && 'message' in err && err.message ? err : errMsg
+      );
+      throw err;
     }
   };
 
@@ -309,7 +352,9 @@ export const AdminPortal: React.FC = () => {
         {activeTab === 'catalog' && (
           <InventoryTab
             products={products}
+            categories={categories}
             onSave={handleSaveInventory}
+            onSaveCategories={handleSaveCategories}
           />
         )}
 

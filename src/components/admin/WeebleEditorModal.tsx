@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { Product, VariantPrices, VariantType } from '../../types';
+import { CategoryOption, Product, VariantPrices, VariantType } from '../../types';
+import { DEFAULT_CATEGORIES, formatCategoryLabel, getProductCategories } from '../../utils/productUtils';
 
 export interface WeebleEditorModalProps {
   product: Product | null;
+  categories?: CategoryOption[];
   isOpen: boolean;
   onClose: () => void;
   onSave: (product: Product, newImage?: { filename: string; base64Data: string }) => void;
 }
 
+function resolveInitialCategories(product: Product | null, categories: CategoryOption[]): string[] {
+  if (!product) return [];
+  const validIds = new Set(categories.map((c) => c.id));
+  return getProductCategories(product).filter((id) => validIds.has(id));
+}
+
 export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
   product,
+  categories = DEFAULT_CATEGORIES,
   isOpen,
   onClose,
   onSave,
@@ -24,7 +33,9 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
   const [keychainPrice, setKeychainPrice] = useState(
     product ? String(product.variantPrices?.keychain ?? product.price) : '14.00'
   );
-  const [category, setCategory] = useState<Product['category']>(product?.category || 'sweets');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(() =>
+    resolveInitialCategories(product, categories)
+  );
   const [imageUrl, setImageUrl] = useState(product?.images[0] || '');
   const [variants, setVariants] = useState<VariantType[]>(
     product ? product.availableVariants : ['magnet', 'keychain']
@@ -47,7 +58,6 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
       setKeychainPrice(
         product ? String(product.variantPrices?.keychain ?? product.price) : '14.00'
       );
-      setCategory(product?.category || 'sweets');
       setImageUrl(product?.images[0] || '');
       setVariants(product ? product.availableVariants : ['magnet', 'keychain']);
       setInStock(product ? product.inStock : true);
@@ -57,6 +67,13 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
       setUploadedImage(null);
     }
   }, [product, isOpen]);
+
+  // Sync selected categories when product, modal visibility, or available categories change
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedCategories(resolveInitialCategories(product, categories));
+    }
+  }, [product, isOpen, categories]);
 
   // Accessibility: Close on Escape key press
   useEffect(() => {
@@ -120,6 +137,14 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleToggleCategory = (categoryId: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(categoryId)
+        ? prev.filter((id) => id !== categoryId)
+        : [...prev, categoryId]
+    );
   };
 
   const handleToggleVariant = (v: VariantType) => {
@@ -190,7 +215,7 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
       price: resolvedBasePrice,
       variantPrices,
       images: [finalImagePath || '/images/products/placeholder.jpg'],
-      category,
+      categories: selectedCategories,
       availableVariants: variants,
       inStock: finalInStock,
       stockCount: finalStockCount,
@@ -240,38 +265,55 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="weeble-name" className="block text-xs font-bold text-weeble-text mb-1">
-                Name
-              </label>
-              <input
-                id="weeble-name"
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3 py-2 text-weeble-text focus:outline-none focus:border-weeble-pink"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="weeble-category" className="block text-xs font-bold text-weeble-text mb-1">
-                Category
-              </label>
-              <select
-                id="weeble-category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value as Product['category'])}
-                className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3 py-2 text-weeble-text focus:outline-none focus:border-weeble-pink"
-              >
-                <option value="sweets">🍩 Sweets</option>
-                <option value="animals">🐰 Animals</option>
-                <option value="fantasy">✨ Fantasy</option>
-                <option value="mini-friends">🌸 Mini-Friends</option>
-              </select>
-            </div>
+          <div>
+            <label htmlFor="weeble-name" className="block text-xs font-bold text-weeble-text mb-1">
+              Name
+            </label>
+            <input
+              id="weeble-name"
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3 py-2 text-weeble-text focus:outline-none focus:border-weeble-pink"
+            />
           </div>
+
+          {/* Categories Multi-Select */}
+          <fieldset>
+            <legend className="block text-xs font-bold text-weeble-text mb-1.5">
+              Categories (select one or more)
+            </legend>
+            {categories.length === 0 ? (
+              <p className="text-xs text-weeble-textMuted bg-weeble-pinkWash/60 border border-pink-200 rounded-xl px-3 py-2">
+                No categories available yet. Use Manage Categories to add some.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2 bg-weeble-pinkWash/60 border border-pink-200 rounded-2xl p-3">
+                {categories.map((cat) => {
+                  const checked = selectedCategories.includes(cat.id);
+                  return (
+                    <label
+                      key={cat.id}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border cursor-pointer transition-all ${
+                        checked
+                          ? 'bg-weeble-pink text-white border-weeble-pink shadow-xs'
+                          : 'bg-white text-weeble-text border-pink-200 hover:bg-pink-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => handleToggleCategory(cat.id)}
+                        className="sr-only"
+                      />
+                      <span>{formatCategoryLabel(cat)}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </fieldset>
 
           {/* Variants & Per-Variant Pricing */}
           <div>

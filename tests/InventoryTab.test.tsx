@@ -326,7 +326,7 @@ describe('InventoryTab', () => {
     window.FileReader = originalFileReader;
   });
 
-  it('handles category selection and stock toggles', async () => {
+  it('handles multi-select category selection and stock toggles', async () => {
     const handleSave = vi.fn().mockResolvedValue(undefined);
     render(<InventoryTab products={mockProducts} onSave={handleSave} />);
 
@@ -335,7 +335,8 @@ describe('InventoryTab', () => {
 
     fireEvent.change(screen.getByLabelText(/Name/i), { target: { value: 'Sparkle Cat' } });
     fireEvent.change(screen.getByLabelText(/Description/i), { target: { value: 'Magical kitten' } });
-    fireEvent.change(screen.getByLabelText(/Category/i), { target: { value: 'fantasy' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /Fantasy/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Critters/i }));
 
     // Toggle 1-of-1
     const oneOfAKindCheckbox = screen.getByLabelText(/1-of-1 Original/i);
@@ -348,9 +349,100 @@ describe('InventoryTab', () => {
     });
 
     const savedProducts = handleSave.mock.calls[0][0];
-    expect(savedProducts[0].category).toBe('fantasy');
+    expect(savedProducts[0].categories).toEqual(['fantasy', 'animals']);
+    expect(savedProducts[0].category).toBeUndefined();
     expect(savedProducts[0].isOneOfAKind).toBe(true);
     expect(savedProducts[0].stockCount).toBe(1);
+  });
+
+  it('pre-checks existing categories when editing a multi-category item and displays multiple categories in inventory list', async () => {
+    const handleSave = vi.fn().mockResolvedValue(undefined);
+    const multiProducts: Product[] = [
+      {
+        ...mockProducts[0],
+        categories: ['animals', 'sweets'],
+        category: undefined,
+      },
+      {
+        ...mockProducts[1],
+        categories: [],
+        category: undefined,
+      },
+    ];
+
+    render(<InventoryTab products={multiProducts} onSave={handleSave} />);
+
+    expect(screen.getByText('🐰 Critters, 🍩 Sweets')).toBeInTheDocument();
+    expect(screen.getByText('Uncategorized')).toBeInTheDocument();
+
+    const editBtns = screen.getAllByRole('button', { name: /Edit/i });
+    fireEvent.click(editBtns[0]);
+
+    expect(screen.getByRole('checkbox', { name: /Critters/i })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Sweets/i })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Fantasy/i })).not.toBeChecked();
+
+    // Uncheck both to verify 0 categories is allowed
+    fireEvent.click(screen.getByRole('checkbox', { name: /Critters/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Sweets/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Save Weeble/i }));
+
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledTimes(1);
+    });
+
+    expect(handleSave.mock.calls[0][0][0].categories).toEqual([]);
+  });
+
+  it('pre-checks legacy single category product and preserves explicit empty categories array', async () => {
+    const handleSave = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(<InventoryTab products={mockProducts} onSave={handleSave} />);
+
+    expect(screen.getByText('🐰 Critters')).toBeInTheDocument();
+
+    const editBtns = screen.getAllByRole('button', { name: /Edit/i });
+    fireEvent.click(editBtns[0]);
+
+    expect(screen.getByRole('checkbox', { name: /Critters/i })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Sweets/i })).not.toBeChecked();
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Weeble/i }));
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledTimes(1);
+    });
+    expect(handleSave.mock.calls[0][0][0].categories).toEqual(['animals']);
+    expect(handleSave.mock.calls[0][0][0].category).toBeUndefined();
+
+    // Explicit empty categories array must not fall back to DEFAULT_CATEGORIES
+    rerender(<InventoryTab products={mockProducts} categories={[]} onSave={handleSave} />);
+    fireEvent.click(screen.getByRole('button', { name: /\+ Add New Weeble/i }));
+    expect(screen.getByText(/No categories available yet/i)).toBeInTheDocument();
+  });
+
+  it('opens Manage Categories modal and cascades deletion through onSaveCategories', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const onSaveCategories = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <InventoryTab
+        products={mockProducts}
+        onSave={vi.fn()}
+        onSaveCategories={onSaveCategories}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Manage Categories/i }));
+    expect(screen.getByRole('heading', { name: /Manage Categories/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Critters' }));
+
+    await waitFor(() => {
+      expect(onSaveCategories).toHaveBeenCalledTimes(1);
+    });
+
+    const [updatedCategories, updatedProducts] = onSaveCategories.mock.calls[0];
+    expect(updatedCategories.some((c: any) => c.id === 'animals')).toBe(false);
+    expect(updatedProducts[0].categories).toEqual([]);
   });
 
   it('allows editing stock count on a 1-of-1 item and updates inStock and isOneOfAKind accordingly', async () => {
