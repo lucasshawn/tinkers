@@ -223,6 +223,30 @@ export function diffSettingsChanges(
     },
   ];
 
+  if (
+    typeof oldSettings.socialLinksEnabled === 'boolean' ||
+    typeof newSettings.socialLinksEnabled === 'boolean'
+  ) {
+    comparisons.push({
+      label: 'Site Content - Social Media Links Enabled',
+      oldVal: String(oldSettings.socialLinksEnabled ?? true),
+      newVal: String(newSettings.socialLinksEnabled ?? true),
+    });
+  }
+
+  if (Array.isArray(oldSettings.socialLinks) || Array.isArray(newSettings.socialLinks)) {
+    const summarizeLinks = (links?: SiteSettings['socialLinks']) =>
+      (links || [])
+        .map((l) => `${l.platform}:${l.url || '(empty)'} [${l.enabled ? 'on' : 'off'}]`)
+        .join(', ') || '(none)';
+
+    comparisons.push({
+      label: 'Site Content - Social Media Links',
+      oldVal: summarizeLinks(oldSettings.socialLinks),
+      newVal: summarizeLinks(newSettings.socialLinks),
+    });
+  }
+
   for (const cmp of comparisons) {
     if (cmp.oldVal !== cmp.newVal) {
       entries.push({

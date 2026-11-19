@@ -129,7 +129,7 @@ describe('changeLogUtils', () => {
           text: 'Winter drop live!',
         },
         socials: {
-          ...baseSettings.socials,
+          ...baseSettings.socials!,
           instagram: 'https://instagram.com/weebles_new',
         },
       };
@@ -152,6 +152,37 @@ describe('changeLogUtils', () => {
         {
           change: 'Site Content - Instagram URL',
           comment: 'Old: https://instagram.com/weebles -> New: https://instagram.com/weebles_new',
+        },
+      ]);
+    });
+
+    it('logs changes to socialLinksEnabled and socialLinks when present', () => {
+      const oldWithSocials: SiteSettings = {
+        ...baseSettings,
+        socialLinksEnabled: true,
+        socialLinks: [
+          { id: '1', platform: 'tiktok', url: 'https://tiktok.com/@weebles', enabled: true },
+        ],
+      };
+      const newWithSocials: SiteSettings = {
+        ...baseSettings,
+        socialLinksEnabled: false,
+        socialLinks: [
+          { id: '1', platform: 'tiktok', url: 'https://tiktok.com/@weebles', enabled: false },
+          { id: '2', platform: 'x', url: 'https://x.com/weebles_clay', enabled: true },
+        ],
+      };
+
+      const entries = diffSettingsChanges(adminEmail, oldWithSocials, newWithSocials, fixedNow);
+      expect(entries.map((e) => ({ change: e.change, comment: e.comment }))).toEqual([
+        {
+          change: 'Site Content - Social Media Links Enabled',
+          comment: 'Old: true -> New: false',
+        },
+        {
+          change: 'Site Content - Social Media Links',
+          comment:
+            'Old: tiktok:https://tiktok.com/@weebles [on] -> New: tiktok:https://tiktok.com/@weebles [off], x:https://x.com/weebles_clay [on]',
         },
       ]);
     });

@@ -12,9 +12,9 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
   const [bannerText, setBannerText] = useState(settings.announcementBanner?.text ?? '');
   const [contactEmail, setContactEmail] = useState(settings.contactEmail);
   const [customOrderEmail, setCustomOrderEmail] = useState(settings.customOrderEmail);
-  const [tiktok, setTiktok] = useState(settings.socials.tiktok);
-  const [instagram, setInstagram] = useState(settings.socials.instagram);
-  const [facebookMarketplace, setFacebookMarketplace] = useState(settings.socials.facebookMarketplace);
+  const [tiktok, setTiktok] = useState(settings.socials?.tiktok ?? '');
+  const [instagram, setInstagram] = useState(settings.socials?.instagram ?? '');
+  const [facebookMarketplace, setFacebookMarketplace] = useState(settings.socials?.facebookMarketplace ?? '');
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 

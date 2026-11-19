@@ -17,9 +17,9 @@ describe('SettingsContext', () => {
 
     expect(result.current.settings.contactEmail).toBe('weeblesclay@gmail.com');
     expect(result.current.settings.customOrderEmail).toBe('weeblesclay@gmail.com');
-    expect(result.current.settings.socials.tiktok).toBe('https://tiktok.com/@weebles_clay');
-    expect(result.current.settings.socials.instagram).toBe('https://instagram.com/weebles_clay');
-    expect(result.current.settings.socials.facebookMarketplace).toBe('https://facebook.com/marketplace');
+    expect(result.current.settings.socials?.tiktok).toBe('https://tiktok.com/@weebles_clay');
+    expect(result.current.settings.socials?.instagram).toBe('https://instagram.com/weebles_clay');
+    expect(result.current.settings.socials?.facebookMarketplace).toBe('https://facebook.com/marketplace');
     // Ensure localStorage was NOT written on initial load
     expect(localStorage.getItem('weebles_settings_v1')).toBeNull();
   });
@@ -65,7 +65,7 @@ describe('SettingsContext', () => {
     const { result } = renderHook(() => useSettings());
 
     expect(result.current.settings.contactEmail).toBe('weeblesclay@gmail.com');
-    expect(result.current.settings.socials.tiktok).toBe('https://tiktok.com/@weebles_clay');
+    expect(result.current.settings.socials?.tiktok).toBe('https://tiktok.com/@weebles_clay');
   });
 
   it('initializes from localStorage if valid data is present', () => {
@@ -82,6 +82,44 @@ describe('SettingsContext', () => {
 
     const { result } = renderHook(() => useSettings(), { wrapper });
     expect(result.current.settings.contactEmail).toBe('stored@weebles.com');
-    expect(result.current.settings.socials.tiktok).toBe('https://tiktok.com/@stored');
+    expect(result.current.settings.socials?.tiktok).toBe('https://tiktok.com/@stored');
+  });
+
+  it('migrates legacy localStorage settings without socialLinks into normalized socialLinks', () => {
+    const legacyStored = {
+      contactEmail: 'legacy@weebles.com',
+      customOrderEmail: 'legacy@weebles.com',
+      socials: {
+        tiktok: 'https://tiktok.com/@legacy_user',
+        instagram: 'https://instagram.com/legacy_user',
+        facebookMarketplace: 'https://facebook.com/marketplace/legacy_user',
+      },
+    };
+    localStorage.setItem('weebles_settings_v1', JSON.stringify(legacyStored));
+
+    const { result } = renderHook(() => useSettings(), { wrapper });
+    expect(result.current.settings.socialLinksEnabled).toBe(true);
+    expect(result.current.settings.socialLinks).toHaveLength(3);
+    expect(result.current.settings.socialLinks?.[0].url).toBe('https://tiktok.com/@legacy_user');
+    expect(result.current.settings.socialLinks?.[1].url).toBe('https://instagram.com/legacy_user');
+    expect(result.current.settings.socialLinks?.[2].url).toBe('https://facebook.com/marketplace/legacy_user');
+  });
+
+  it('hydrates remote settings via hydrateSettings without writing to localStorage', () => {
+    const { result } = renderHook(() => useSettings(), { wrapper });
+
+    act(() => {
+      result.current.hydrateSettings({
+        ...result.current.settings,
+        socialLinksEnabled: false,
+        socialLinks: [
+          { id: 'x-1', platform: 'x', url: 'https://x.com/weebles_clay', enabled: true },
+        ],
+      });
+    });
+
+    expect(result.current.settings.socialLinksEnabled).toBe(false);
+    expect(result.current.settings.socialLinks).toHaveLength(1);
+    expect(localStorage.getItem('weebles_settings_v1')).toBeNull();
   });
 });

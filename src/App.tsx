@@ -10,7 +10,7 @@ import { SocialStrip } from './components/SocialStrip';
 import { Footer } from './components/Footer';
 import { OrderSuccess } from './components/OrderSuccess';
 import { createCheckoutSession } from './services/stripe';
-import { SettingsProvider, useSettings } from './context/SettingsContext';
+import { SettingsProvider, useSettings, SETTINGS_STORAGE_KEY } from './context/SettingsContext';
 import { AdminPortal } from './components/admin/AdminPortal';
 import { AnnouncementBanner } from './components/AnnouncementBanner';
 import productsData from './data/products.json';
@@ -20,7 +20,7 @@ import { adminApi } from './services/adminApi';
 
 export const AppContent: React.FC = () => {
   const { items, setIsCartOpen } = useCart();
-  const { settings } = useSettings();
+  const { settings, hydrateSettings } = useSettings();
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
   const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
@@ -34,14 +34,20 @@ export const AppContent: React.FC = () => {
 
   useEffect(() => {
     if (import.meta.env.MODE === 'test') return;
-    if (localStorage.getItem(PRODUCTS_STORAGE_KEY)) return;
+    const hasStoredProducts = Boolean(localStorage.getItem(PRODUCTS_STORAGE_KEY));
+    const hasStoredSettings = Boolean(localStorage.getItem(SETTINGS_STORAGE_KEY));
+    if (hasStoredProducts && hasStoredSettings) return;
+
     adminApi.loadStoreData().then((data) => {
-      if (data?.products && Array.isArray(data.products)) {
+      if (!hasStoredProducts && data?.products && Array.isArray(data.products)) {
         setProducts(data.products);
         saveStoredProducts(data.products);
       }
+      if (!hasStoredSettings && data?.settings && typeof data.settings === 'object') {
+        hydrateSettings(data.settings);
+      }
     });
-  }, []);
+  }, [hydrateSettings]);
 
   // Check if viewing order success
   const isSuccessPage =

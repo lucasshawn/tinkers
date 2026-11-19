@@ -8,7 +8,7 @@ import { InventoryTab } from './InventoryTab';
 import { PaymentsTab } from './PaymentsTab';
 import { ContentTab } from './ContentTab';
 import { ChangesTab } from './ChangesTab';
-import { useSettings } from '../../context/SettingsContext';
+import { useSettings, SETTINGS_STORAGE_KEY } from '../../context/SettingsContext';
 import initialProductsData from '../../data/products.json';
 import initialChangesData from '../../data/changes.json';
 import { Product, ChangeLogEntry } from '../../types';
@@ -39,7 +39,7 @@ export const AdminPortal: React.FC = () => {
     const defaults = Array.isArray(initialChangesData) ? (initialChangesData as ChangeLogEntry[]) : [];
     return getStoredChanges(defaults);
   });
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, hydrateSettings } = useSettings();
   const [notification, setNotification] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -50,6 +50,9 @@ export const AdminPortal: React.FC = () => {
         setProducts(data.products);
         saveStoredProducts(data.products);
       }
+      if (!localStorage.getItem(SETTINGS_STORAGE_KEY) && data?.settings && typeof data.settings === 'object') {
+        hydrateSettings(data.settings);
+      }
       if (data?.changes && Array.isArray(data.changes)) {
         setChanges((prev) => {
           const merged = mergeChanges(prev, data.changes!);
@@ -58,7 +61,7 @@ export const AdminPortal: React.FC = () => {
         });
       }
     });
-  }, []);
+  }, [hydrateSettings]);
 
   if (!session) {
     return <AdminLoginCard onLoginSuccess={(s) => setSession(s)} />;
