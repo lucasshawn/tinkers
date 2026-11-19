@@ -29,3 +29,12 @@ dist-ssr
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Worktrees & agent scratch
+.worktrees/
+.superpowers/
+
+
+# Local worktrees & agent scratch
+.worktrees/
+.superpowers/
