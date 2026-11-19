@@ -2,6 +2,7 @@ import { Product, ChangeLogEntry, SiteSettings } from '../types';
 import { formatPrice } from './productUtils';
 
 export const CHANGES_STORAGE_KEY = 'weebles_changes_log_v1';
+export const CHANGE_LOG_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 let idCounter = 0;
 
@@ -32,27 +33,48 @@ function normalizeEntry(raw: any): ChangeLogEntry | null {
   };
 }
 
-export function getStoredChanges(defaults: ChangeLogEntry[] = []): ChangeLogEntry[] {
-  try {
-    const raw = localStorage.getItem(CHANGES_STORAGE_KEY);
-    if (!raw) return defaults;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed.map(normalizeEntry).filter((e): e is ChangeLogEntry => e !== null);
-    }
-  } catch {}
-  return defaults;
+export function pruneExpiredChanges(
+  entries: ChangeLogEntry[],
+  now: number = Date.now()
+): ChangeLogEntry[] {
+  const cutoff = now - CHANGE_LOG_RETENTION_MS;
+  return entries.filter((entry) => {
+    const ts = Date.parse(entry.timestamp);
+    return !Number.isNaN(ts) && ts >= cutoff;
+  });
 }
 
-export function saveStoredChanges(entries: ChangeLogEntry[]): void {
+export function getStoredChanges(
+  defaults: ChangeLogEntry[] = [],
+  now: number = Date.now()
+): ChangeLogEntry[] {
   try {
-    localStorage.setItem(CHANGES_STORAGE_KEY, JSON.stringify(entries));
+    const raw = localStorage.getItem(CHANGES_STORAGE_KEY);
+    if (!raw) return pruneExpiredChanges(defaults, now);
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      const normalized = parsed
+        .map(normalizeEntry)
+        .filter((e): e is ChangeLogEntry => e !== null);
+      return pruneExpiredChanges(normalized, now);
+    }
+  } catch {}
+  return pruneExpiredChanges(defaults, now);
+}
+
+export function saveStoredChanges(
+  entries: ChangeLogEntry[],
+  now: number = Date.now()
+): void {
+  try {
+    localStorage.setItem(CHANGES_STORAGE_KEY, JSON.stringify(pruneExpiredChanges(entries, now)));
   } catch {}
 }
 
 export function mergeChanges(
   existing: ChangeLogEntry[],
-  incoming: ChangeLogEntry[]
+  incoming: ChangeLogEntry[],
+  now: number = Date.now()
 ): ChangeLogEntry[] {
   const byId = new Map<string, ChangeLogEntry>();
   for (const rawItem of [...incoming, ...existing]) {
@@ -61,7 +83,7 @@ export function mergeChanges(
       byId.set(item.id, item);
     }
   }
-  return Array.from(byId.values()).sort((a, b) => {
+  return pruneExpiredChanges(Array.from(byId.values()), now).sort((a, b) => {
     const tA = Date.parse(a.timestamp) || 0;
     const tB = Date.parse(b.timestamp) || 0;
     return tB - tA;

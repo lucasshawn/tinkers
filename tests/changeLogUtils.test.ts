@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  CHANGE_LOG_RETENTION_MS,
+  pruneExpiredChanges,
   getStoredChanges,
   saveStoredChanges,
   mergeChanges,
@@ -219,10 +221,13 @@ describe('changeLogUtils', () => {
     });
   });
 
-  describe('localStorage & mergeChanges & formatLocalTimestamp', () => {
+  describe('localStorage & mergeChanges & 30-day retention & formatLocalTimestamp', () => {
     it('persists, reads, and deduplicates change entries via mergeChanges', () => {
-      const e1 = createErrorLogEntry(adminEmail, 'Act 1', 'old1', 'err1', '2026-11-18T10:00:00.000Z');
-      const e2 = createErrorLogEntry(adminEmail, 'Act 2', 'old2', 'err2', '2026-11-18T12:00:00.000Z');
+      const now = Date.now();
+      const t1 = new Date(now - 2 * 60 * 60 * 1000).toISOString();
+      const t2 = new Date(now - 1 * 60 * 60 * 1000).toISOString();
+      const e1 = createErrorLogEntry(adminEmail, 'Act 1', 'old1', 'err1', t1);
+      const e2 = createErrorLogEntry(adminEmail, 'Act 2', 'old2', 'err2', t2);
 
       saveStoredChanges([e1]);
       expect(getStoredChanges()).toEqual([e1]);
@@ -231,6 +236,24 @@ describe('changeLogUtils', () => {
       expect(merged).toHaveLength(2);
       expect(merged[0].id).toBe(e2.id);
       expect(merged[1].id).toBe(e1.id);
+    });
+
+    it('prunes entries older than 30 days in pruneExpiredChanges, mergeChanges, and getStoredChanges', () => {
+      expect(CHANGE_LOG_RETENTION_MS).toBe(30 * 24 * 60 * 60 * 1000);
+      const now = Date.now();
+      const recentIso = new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString();
+      const boundaryIso = new Date(now - CHANGE_LOG_RETENTION_MS).toISOString();
+      const expiredIso = new Date(now - CHANGE_LOG_RETENTION_MS - 1000).toISOString();
+
+      const recentEntry = createErrorLogEntry(adminEmail, 'Recent', 'ctx', 'err', recentIso);
+      const boundaryEntry = createErrorLogEntry(adminEmail, 'Boundary', 'ctx', 'err', boundaryIso);
+      const expiredEntry = createErrorLogEntry(adminEmail, 'Expired', 'ctx', 'err', expiredIso);
+
+      const pruned = pruneExpiredChanges([recentEntry, boundaryEntry, expiredEntry], now);
+      expect(pruned.map((e) => e.id)).toEqual([recentEntry.id, boundaryEntry.id]);
+
+      const merged = mergeChanges([expiredEntry], [recentEntry], now);
+      expect(merged.map((e) => e.id)).toEqual([recentEntry.id]);
     });
 
     it('formats ISO timestamp into a local date/time string', () => {

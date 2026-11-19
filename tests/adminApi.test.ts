@@ -546,15 +546,23 @@ describe('admin-save Netlify Function', () => {
     expect(JSON.parse(res.body).success).toBe(true);
   });
 
-  it('saves and merges change log entries when type is changes', async () => {
+  it('saves and merges change log entries when type is changes and prunes entries older than 30 days', async () => {
+    const recentIso = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const expiredIso = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString();
     const entries = [
       {
-        id: 'chg-1',
-        timestamp: '2026-11-18T17:45:00.000Z',
-        who: 'lucasshawn@gmail.com',
-        what: 'Added Weeble: Strawberry Macaron',
-        oldValue: '(none)',
-        newValue: 'Price: $16.50, Category: sweets, Stock: 5 (in stock)',
+        id: 'chg-recent',
+        timestamp: recentIso,
+        user: 'lucasshawn@gmail.com',
+        change: 'Added Weeble: Strawberry Macaron',
+        comment: 'New: Price: $16.50, Category: sweets, Stock: 5 (in stock)',
+      },
+      {
+        id: 'chg-expired',
+        timestamp: expiredIso,
+        user: 'lucasshawn@gmail.com',
+        change: 'Old Expired Change',
+        comment: 'Should be pruned',
       },
     ];
 
@@ -574,6 +582,10 @@ describe('admin-save Netlify Function', () => {
     expect(fs.writeFileSync).toHaveBeenCalledWith(
       expect.stringContaining('changes.json'),
       expect.stringContaining('Strawberry Macaron')
+    );
+    expect(fs.writeFileSync).not.toHaveBeenCalledWith(
+      expect.stringContaining('changes.json'),
+      expect.stringContaining('Old Expired Change')
     );
   });
 });

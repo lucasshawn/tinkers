@@ -74,7 +74,7 @@ export const ChangesTab: React.FC<ChangesTabProps> = ({ changes }) => {
           <div>
             <h2 className="font-bubble text-lg font-bold text-weeble-text">Changes & Error Log</h2>
             <p className="text-xs text-weeble-textMuted">
-              Line-by-line history of all admin changes and errors in local time
+              Line-by-line history of all admin changes and errors in local time (retained for 30 days)
             </p>
           </div>
         </div>

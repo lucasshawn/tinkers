@@ -12,6 +12,16 @@ const TMP_PRODUCTS_FILE = 'weebles-products.json';
 const TMP_SETTINGS_FILE = 'weebles-settings.json';
 const TMP_CHANGES_FILE = 'weebles-changes.json';
 const BLOB_STORE_NAME = 'site:weebles-store';
+const CHANGE_LOG_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+function filterRecentChanges(entries: any[], now: number = Date.now()): any[] {
+  const cutoff = now - CHANGE_LOG_RETENTION_MS;
+  return entries.filter((item) => {
+    if (!item || typeof item.timestamp !== 'string') return false;
+    const ts = Date.parse(item.timestamp);
+    return !Number.isNaN(ts) && ts >= cutoff;
+  });
+}
 
 interface BlobsContext {
   edgeURL: string;
@@ -172,7 +182,7 @@ export async function loadPersistedSettings(event?: any): Promise<any> {
 export async function loadPersistedChanges(event?: any): Promise<any[]> {
   if (event) {
     const blobChanges = await readFromNetlifyBlobs<any[]>(event, 'changes');
-    if (Array.isArray(blobChanges)) return blobChanges;
+    if (Array.isArray(blobChanges)) return filterRecentChanges(blobChanges);
   }
 
   try {
@@ -181,7 +191,7 @@ export async function loadPersistedChanges(event?: any): Promise<any[]> {
       const content = fs.readFileSync(tmpPath, 'utf-8');
       if (content) {
         const parsed = JSON.parse(content);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return filterRecentChanges(parsed);
       }
     }
   } catch {}
@@ -192,12 +202,12 @@ export async function loadPersistedChanges(event?: any): Promise<any[]> {
       const content = fs.readFileSync(localPath, 'utf-8');
       if (content) {
         const parsed = JSON.parse(content);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return filterRecentChanges(parsed);
       }
     }
   } catch {}
 
-  return Array.isArray(defaultChangesData) ? defaultChangesData : [];
+  return Array.isArray(defaultChangesData) ? filterRecentChanges(defaultChangesData) : [];
 }
 
 function verifyToken(authHeader?: string): string | null {
@@ -419,7 +429,7 @@ export const handler: Handler = async (event) => {
           byId.set(item.id, item);
         }
       }
-      const mergedChanges = Array.from(byId.values());
+      const mergedChanges = filterRecentChanges(Array.from(byId.values()));
       const jsonString = JSON.stringify(mergedChanges, null, 2) + '\n';
       const base64Content = Buffer.from(jsonString).toString('base64');
 
