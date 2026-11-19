@@ -8,7 +8,7 @@ export interface SettingsContextType {
   resetSettings: () => void;
 }
 
-const STORAGE_KEY = 'weebles_settings_v1';
+export const SETTINGS_STORAGE_KEY = 'weebles_settings_v1';
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const DEFAULT_SETTINGS: SiteSettings = defaultSettingsData as SiteSettings;
@@ -16,7 +16,7 @@ export const DEFAULT_SETTINGS: SiteSettings = defaultSettingsData as SiteSetting
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<SiteSettings>(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         return {
@@ -26,6 +26,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             ...DEFAULT_SETTINGS.socials,
             ...(parsed?.socials || {}),
           },
+          categories: Array.isArray(parsed?.categories)
+            ? parsed.categories
+            : DEFAULT_SETTINGS.categories,
         };
       }
     } catch {
@@ -37,7 +40,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const updateSettings = (newSettings: SiteSettings) => {
     setSettings(newSettings);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
     } catch {
       // Ignore
     }
@@ -46,7 +49,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const resetSettings = () => {
     setSettings(DEFAULT_SETTINGS);
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(SETTINGS_STORAGE_KEY);
     } catch {
       // Ignore
     }
