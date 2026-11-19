@@ -284,36 +284,50 @@ export function normalizeSocialLinks(
   const legacy = raw?.socials;
   if (legacy && typeof legacy === 'object') {
     const migrated: SocialLink[] = [];
-    if (typeof legacy.tiktok === 'string') {
-      migrated.push({
+    const legacyEntries: Array<{
+      value: unknown;
+      id: string;
+      platform: SocialPlatformId;
+      label: string;
+      subtitle: string;
+    }> = [
+      {
+        value: legacy.tiktok,
         id: 'tiktok-default',
         platform: 'tiktok',
-        url: legacy.tiktok.trim(),
-        enabled: true,
         label: 'TikTok',
         subtitle: '@weebles_clay • ASMR & BTS',
-      });
-    }
-    if (typeof legacy.instagram === 'string') {
-      migrated.push({
+      },
+      {
+        value: legacy.instagram,
         id: 'instagram-default',
         platform: 'instagram',
-        url: legacy.instagram.trim(),
-        enabled: true,
         label: 'Instagram',
         subtitle: '@weebles_clay • Gallery & Drops',
-      });
-    }
-    if (typeof legacy.facebookMarketplace === 'string') {
-      migrated.push({
+      },
+      {
+        value: legacy.facebookMarketplace,
         id: 'facebook-marketplace-default',
         platform: 'facebookMarketplace',
-        url: legacy.facebookMarketplace.trim(),
-        enabled: true,
         label: 'Facebook Marketplace',
         subtitle: 'Local Listings & Events',
-      });
+      },
+    ];
+
+    for (const entry of legacyEntries) {
+      if (typeof entry.value === 'string') {
+        const url = entry.value.trim();
+        migrated.push({
+          id: entry.id,
+          platform: entry.platform,
+          url,
+          enabled: Boolean(url),
+          label: entry.label,
+          subtitle: entry.subtitle,
+        });
+      }
     }
+
     if (migrated.length > 0) return migrated;
   }
 

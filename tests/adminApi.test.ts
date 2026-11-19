@@ -516,6 +516,62 @@ describe('admin-save Netlify Function', () => {
     expect(body.settings).toBeDefined();
   });
 
+  it('migrates legacy Netlify Blobs settings payload with custom socials and no socialLinks on GET action=load', async () => {
+    const legacyBlobSettings = {
+      contactEmail: 'custom@weebles.com',
+      customOrderEmail: 'orders@weebles.com',
+      socials: {
+        tiktok: 'https://tiktok.com/@custom_clay',
+        instagram: 'https://instagram.com/custom_clay',
+        facebookMarketplace: '',
+      },
+    };
+
+    globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/settings')) {
+        return {
+          ok: true,
+          json: async () => legacyBlobSettings,
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    const blobsPayload = Buffer.from(
+      JSON.stringify({ url: 'https://edge.netlify.com', token: 'netlify-blobs-token-xyz' })
+    ).toString('base64');
+
+    const event = {
+      httpMethod: 'GET',
+      headers: {
+        'x-nf-site-id': 'site-12345',
+      },
+      blobs: blobsPayload,
+      queryStringParameters: { action: 'load' },
+    };
+
+    const res = (await handler(event as any, {} as any)) as any;
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.settings.contactEmail).toBe('custom@weebles.com');
+    expect(body.settings.socialLinks).toHaveLength(3);
+    expect(body.settings.socialLinks[0]).toMatchObject({
+      platform: 'tiktok',
+      url: 'https://tiktok.com/@custom_clay',
+      enabled: true,
+    });
+    expect(body.settings.socialLinks[1]).toMatchObject({
+      platform: 'instagram',
+      url: 'https://instagram.com/custom_clay',
+      enabled: true,
+    });
+    expect(body.settings.socialLinks[2]).toMatchObject({
+      platform: 'facebookMarketplace',
+      url: '',
+      enabled: false,
+    });
+  });
+
   it('decodes base64-encoded event.body when event.isBase64Encoded is true', async () => {
     const payload = JSON.stringify({
       type: 'inventory',

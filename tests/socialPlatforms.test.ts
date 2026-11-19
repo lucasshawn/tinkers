@@ -141,6 +141,34 @@ describe('socialPlatforms utilities', () => {
       });
     });
 
+    it('migrates blank legacy socials strings as disabled so they do not fail save validation', () => {
+      const legacyWithBlank: Partial<SiteSettings> = {
+        socials: {
+          tiktok: 'https://tiktok.com/@legacy',
+          instagram: '   ',
+          facebookMarketplace: '',
+        },
+      };
+
+      const normalized = normalizeSettings(legacyWithBlank, defaults);
+      expect(normalized.socialLinks).toHaveLength(3);
+      expect(normalized.socialLinks![0]).toMatchObject({
+        platform: 'tiktok',
+        url: 'https://tiktok.com/@legacy',
+        enabled: true,
+      });
+      expect(normalized.socialLinks![1]).toMatchObject({
+        platform: 'instagram',
+        url: '',
+        enabled: false,
+      });
+      expect(normalized.socialLinks![2]).toMatchObject({
+        platform: 'facebookMarketplace',
+        url: '',
+        enabled: false,
+      });
+    });
+
     it('falls back unknown platforms to website during normalization', () => {
       const normalized = normalizeSettings(
         {

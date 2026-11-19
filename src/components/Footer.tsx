@@ -54,7 +54,7 @@ export const Footer: React.FC = () => {
           </p>
 
           {visibleSocials.length > 0 && (
-            <div
+            <nav
               className="flex flex-wrap items-center gap-2 mt-4"
               aria-label="Social media links"
             >
@@ -74,7 +74,7 @@ export const Footer: React.FC = () => {
                   </a>
                 );
               })}
-            </div>
+            </nav>
           )}
         </div>
       </div>

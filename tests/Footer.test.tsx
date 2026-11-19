@@ -33,6 +33,8 @@ describe('Footer', () => {
       ],
     });
 
+    const nav = screen.getByRole('navigation', { name: /Social media links/i });
+    expect(nav).toBeInTheDocument();
     const xLink = screen.getByRole('link', { name: /Visit us on X/i });
     const igLink = screen.getByRole('link', { name: /Visit us on Instagram/i });
     expect(xLink).toHaveAttribute('href', 'https://x.com/weebles_clay');

@@ -209,4 +209,62 @@ describe('ContentTab', () => {
       expect(screen.getByText(/Site content saved successfully and published!/i)).toBeInTheDocument();
     });
   });
+
+  it('syncs fields when settings prop hydrates after mount before user edits, but preserves in-progress edits afterward', () => {
+    const initialSettings: SiteSettings = {
+      contactEmail: 'default@weebles.com',
+      customOrderEmail: 'default-orders@weebles.com',
+      socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+      socialLinksEnabled: true,
+      socialLinks: [
+        { id: 'def-1', platform: 'tiktok', url: 'https://tiktok.com/@default', enabled: true },
+      ],
+      announcementBanner: { enabled: false, text: '' },
+    };
+
+    const hydratedSettings: SiteSettings = {
+      contactEmail: 'hydrated@weebles.com',
+      customOrderEmail: 'hydrated-orders@weebles.com',
+      socials: { tiktok: 'https://tiktok.com/@hydrated', instagram: '', facebookMarketplace: '' },
+      socialLinksEnabled: false,
+      socialLinks: [
+        { id: 'hyd-1', platform: 'x', url: 'https://x.com/hydrated_clay', enabled: true },
+      ],
+      announcementBanner: { enabled: true, text: 'Hydrated Banner' },
+    };
+
+    const { rerender } = render(<ContentTab settings={initialSettings} onSave={vi.fn()} />);
+
+    // Re-render with hydrated settings before any user edits -> all fields update
+    rerender(<ContentTab settings={hydratedSettings} onSave={vi.fn()} />);
+
+    expect(screen.getByRole('checkbox', { name: /Enable Announcement Banner/i })).toBeChecked();
+    expect(screen.getByLabelText(/Banner Text/i)).toHaveValue('Hydrated Banner');
+    expect(screen.getByLabelText(/General Contact Email/i)).toHaveValue('hydrated@weebles.com');
+    expect(screen.getByLabelText(/Custom Order Request Notification Email/i)).toHaveValue('hydrated-orders@weebles.com');
+    expect(screen.getByRole('checkbox', { name: /Show Social Media Links on Storefront/i })).not.toBeChecked();
+    expect(screen.getByDisplayValue('https://x.com/hydrated_clay')).toBeInTheDocument();
+
+    // User edits a field -> subsequent settings updates must not overwrite in-progress edits
+    fireEvent.change(screen.getByLabelText(/Banner Text/i), {
+      target: { value: 'In-Progress Admin Edit' },
+    });
+
+    const lateSettings: SiteSettings = {
+      ...hydratedSettings,
+      contactEmail: 'late@weebles.com',
+      socialLinksEnabled: true,
+      socialLinks: [
+        { id: 'late-1', platform: 'instagram', url: 'https://instagram.com/late_clay', enabled: true },
+      ],
+      announcementBanner: { enabled: false, text: 'Late Overwrite' },
+    };
+
+    rerender(<ContentTab settings={lateSettings} onSave={vi.fn()} />);
+
+    expect(screen.getByLabelText(/Banner Text/i)).toHaveValue('In-Progress Admin Edit');
+    expect(screen.getByLabelText(/General Contact Email/i)).toHaveValue('hydrated@weebles.com');
+    expect(screen.getByRole('checkbox', { name: /Show Social Media Links on Storefront/i })).not.toBeChecked();
+    expect(screen.getByDisplayValue('https://x.com/hydrated_clay')).toBeInTheDocument();
+  });
 });

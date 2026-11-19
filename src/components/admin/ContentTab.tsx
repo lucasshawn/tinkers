@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Save, CheckCircle2, Mail, Sparkles, Megaphone } from 'lucide-react';
 import { SiteSettings, SocialLink } from '../../types/settings';
 import {
@@ -27,12 +27,29 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
   const [socialValidationError, setSocialValidationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const hasEditedRef = useRef(false);
+
+  useEffect(() => {
+    if (hasEditedRef.current) return;
+    setBannerEnabled(settings.announcementBanner?.enabled ?? false);
+    setBannerText(settings.announcementBanner?.text ?? '');
+    setContactEmail(settings.contactEmail);
+    setCustomOrderEmail(settings.customOrderEmail);
+    setSocialLinksEnabled(settings.socialLinksEnabled ?? true);
+    setSocialLinks(normalizeSocialLinks(settings));
+  }, [settings]);
 
   const handleLinksChange = (nextLinks: SocialLink[]) => {
+    hasEditedRef.current = true;
     setSocialLinks(nextLinks);
     if (socialValidationError) {
       setSocialValidationError(null);
     }
+  };
+
+  const handleSocialLinksEnabledChange = (enabled: boolean) => {
+    hasEditedRef.current = true;
+    setSocialLinksEnabled(enabled);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -78,6 +95,7 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
           text: bannerText,
         },
       });
+      hasEditedRef.current = false;
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 4000);
     } finally {
@@ -114,7 +132,10 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
               id="bannerEnabled"
               type="checkbox"
               checked={bannerEnabled}
-              onChange={(e) => setBannerEnabled(e.target.checked)}
+              onChange={(e) => {
+                hasEditedRef.current = true;
+                setBannerEnabled(e.target.checked);
+              }}
               aria-label="Enable Announcement Banner"
               className="w-5 h-5 rounded-lg text-weeble-pink accent-weeble-pink focus:ring-pink-300 border-pink-300 transition-all cursor-pointer"
             />
@@ -131,7 +152,10 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
               id="bannerText"
               type="text"
               value={bannerText}
-              onChange={(e) => setBannerText(e.target.value)}
+              onChange={(e) => {
+                hasEditedRef.current = true;
+                setBannerText(e.target.value);
+              }}
               placeholder="🌸 Fall Restock is now LIVE! Handmade charms, magnets & keychains"
               className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3.5 py-2.5 text-weeble-text focus:outline-none focus:border-weeble-pink"
             />
@@ -172,7 +196,10 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
               type="email"
               required
               value={contactEmail}
-              onChange={(e) => setContactEmail(e.target.value)}
+              onChange={(e) => {
+                hasEditedRef.current = true;
+                setContactEmail(e.target.value);
+              }}
               className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3.5 py-2.5 text-weeble-text focus:outline-none focus:border-weeble-pink"
             />
           </div>
@@ -186,7 +213,10 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
               type="email"
               required
               value={customOrderEmail}
-              onChange={(e) => setCustomOrderEmail(e.target.value)}
+              onChange={(e) => {
+                hasEditedRef.current = true;
+                setCustomOrderEmail(e.target.value);
+              }}
               className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3.5 py-2.5 text-weeble-text focus:outline-none focus:border-weeble-pink"
             />
           </div>
@@ -198,7 +228,7 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
         enabled={socialLinksEnabled}
         links={socialLinks}
         validationError={socialValidationError}
-        onEnabledChange={setSocialLinksEnabled}
+        onEnabledChange={handleSocialLinksEnabledChange}
         onLinksChange={handleLinksChange}
       />
 

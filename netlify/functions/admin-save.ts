@@ -7,6 +7,8 @@ import { getAllowedAdmins } from './admin-auth';
 import defaultProductsData from '../../src/data/products.json';
 import defaultSettingsData from '../../src/data/settings.json';
 import defaultChangesData from '../../src/data/changes.json';
+import { SiteSettings } from '../../src/types/settings';
+import { normalizeSettings } from '../../src/utils/socialPlatforms';
 
 const TMP_PRODUCTS_FILE = 'weebles-products.json';
 const TMP_SETTINGS_FILE = 'weebles-settings.json';
@@ -142,7 +144,7 @@ export async function loadPersistedSettings(event?: any): Promise<any> {
   if (event) {
     const blobSettings = await readFromNetlifyBlobs<any>(event, 'settings');
     if (blobSettings && typeof blobSettings === 'object') {
-      return { ...defaultSettingsData, ...blobSettings };
+      return normalizeSettings(blobSettings, defaultSettingsData as SiteSettings);
     }
   }
 
@@ -151,7 +153,7 @@ export async function loadPersistedSettings(event?: any): Promise<any> {
     if (fs.existsSync(tmpPath)) {
       const content = fs.readFileSync(tmpPath, 'utf-8');
       if (content) {
-        return { ...defaultSettingsData, ...JSON.parse(content) };
+        return normalizeSettings(JSON.parse(content) || undefined, defaultSettingsData as SiteSettings);
       }
     }
   } catch {}
@@ -161,12 +163,12 @@ export async function loadPersistedSettings(event?: any): Promise<any> {
     if (fs.existsSync(localPath)) {
       const content = fs.readFileSync(localPath, 'utf-8');
       if (content) {
-        return { ...defaultSettingsData, ...JSON.parse(content) };
+        return normalizeSettings(JSON.parse(content) || undefined, defaultSettingsData as SiteSettings);
       }
     }
   } catch {}
 
-  return { ...defaultSettingsData };
+  return normalizeSettings(undefined, defaultSettingsData as SiteSettings);
 }
 
 export async function loadPersistedChanges(event?: any): Promise<any[]> {
