@@ -5,12 +5,14 @@ export interface AdminsTabProps {
   admins: string[];
   currentAdminEmail: string;
   onSave: (updatedAdmins: string[]) => Promise<void>;
+  onLogError?: (action: string, attemptedValue: string, errorMessage: string) => void;
 }
 
 export const AdminsTab: React.FC<AdminsTabProps> = ({
   admins,
   currentAdminEmail,
   onSave,
+  onLogError,
 }) => {
   const [newEmail, setNewEmail] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -43,6 +45,7 @@ export const AdminsTab: React.FC<AdminsTabProps> = ({
     const validationError = validateEmail(newEmail);
     if (validationError) {
       setErrorMessage(validationError);
+      onLogError?.('Add Admin', newEmail.trim() || '(empty)', validationError);
       return;
     }
 
@@ -68,12 +71,16 @@ export const AdminsTab: React.FC<AdminsTabProps> = ({
 
     const isCurrent = emailToRemove.trim().toLowerCase() === normalizedCurrentEmail;
     if (isCurrent) {
-      setErrorMessage('You cannot remove yourself from administrators.');
+      const msg = 'You cannot remove yourself from administrators.';
+      setErrorMessage(msg);
+      onLogError?.('Remove Admin', emailToRemove, msg);
       return;
     }
 
     if (admins.length <= 1) {
-      setErrorMessage('Cannot remove the last remaining administrator.');
+      const msg = 'Cannot remove the last remaining administrator.';
+      setErrorMessage(msg);
+      onLogError?.('Remove Admin', emailToRemove, msg);
       return;
     }
 

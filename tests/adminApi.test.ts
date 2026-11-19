@@ -545,6 +545,37 @@ describe('admin-save Netlify Function', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).success).toBe(true);
   });
+
+  it('saves and merges change log entries when type is changes', async () => {
+    const entries = [
+      {
+        id: 'chg-1',
+        timestamp: '2026-11-18T17:45:00.000Z',
+        who: 'lucasshawn@gmail.com',
+        what: 'Added Weeble: Strawberry Macaron',
+        oldValue: '(none)',
+        newValue: 'Price: $16.50, Category: sweets, Stock: 5 (in stock)',
+      },
+    ];
+
+    const event = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'changes',
+        changes: entries,
+      }),
+    };
+
+    const res = (await handler(event as any, {} as any)) as any;
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.success).toBe(true);
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      expect.stringContaining('changes.json'),
+      expect.stringContaining('Strawberry Macaron')
+    );
+  });
 });
 
 describe('adminApi client service', () => {
@@ -728,5 +759,46 @@ describe('adminApi client service', () => {
     });
 
     await expect(adminApi.saveAdmins(['lucasshawn@gmail.com'])).rejects.toThrow('Forbidden');
+  });
+
+  it('saveChanges posts change log entries with session Bearer token', async () => {
+    adminAuth.setSession({
+      token: 'changes-token',
+      email: 'lucasshawn@gmail.com',
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, message: 'Changes logged' }),
+    });
+    globalThis.fetch = mockFetch;
+
+    const entries = [
+      {
+        id: 'chg-1',
+        timestamp: '2026-11-18T17:45:00.000Z',
+        who: 'lucasshawn@gmail.com',
+        what: 'Admin Whitelist - Added Admin',
+        oldValue: '(not authorized)',
+        newValue: 'new@weebles.com',
+      },
+    ];
+
+    const result = await adminApi.saveChanges(entries);
+    expect(result.success).toBe(true);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/.netlify/functions/admin-save',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer changes-token',
+        },
+        body: JSON.stringify({
+          type: 'changes',
+          changes: entries,
+        }),
+      })
+    );
   });
 });

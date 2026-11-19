@@ -6,9 +6,11 @@ import path from 'path';
 import { getAllowedAdmins } from './admin-auth';
 import defaultProductsData from '../../src/data/products.json';
 import defaultSettingsData from '../../src/data/settings.json';
+import defaultChangesData from '../../src/data/changes.json';
 
 const TMP_PRODUCTS_FILE = 'weebles-products.json';
 const TMP_SETTINGS_FILE = 'weebles-settings.json';
+const TMP_CHANGES_FILE = 'weebles-changes.json';
 const BLOB_STORE_NAME = 'site:weebles-store';
 
 interface BlobsContext {
@@ -167,6 +169,37 @@ export async function loadPersistedSettings(event?: any): Promise<any> {
   return { ...defaultSettingsData };
 }
 
+export async function loadPersistedChanges(event?: any): Promise<any[]> {
+  if (event) {
+    const blobChanges = await readFromNetlifyBlobs<any[]>(event, 'changes');
+    if (Array.isArray(blobChanges)) return blobChanges;
+  }
+
+  try {
+    const tmpPath = path.join(os.tmpdir(), TMP_CHANGES_FILE);
+    if (fs.existsSync(tmpPath)) {
+      const content = fs.readFileSync(tmpPath, 'utf-8');
+      if (content) {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch {}
+
+  try {
+    const localPath = path.resolve(process.cwd(), 'src/data/changes.json');
+    if (fs.existsSync(localPath)) {
+      const content = fs.readFileSync(localPath, 'utf-8');
+      if (content) {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch {}
+
+  return Array.isArray(defaultChangesData) ? defaultChangesData : [];
+}
+
 function verifyToken(authHeader?: string): string | null {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
   const token = authHeader.replace('Bearer ', '').trim();
@@ -237,12 +270,13 @@ export const handler: Handler = async (event) => {
   if (event.httpMethod === 'GET' && event.queryStringParameters?.action === 'load') {
     const products = await loadPersistedProducts(event);
     const settings = await loadPersistedSettings(event);
+    const changes = await loadPersistedChanges(event);
     return {
       statusCode: 200,
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ products, settings }),
+      body: JSON.stringify({ products, settings, changes }),
     };
   }
 
@@ -265,7 +299,7 @@ export const handler: Handler = async (event) => {
       event.isBase64Encoded && event.body
         ? Buffer.from(event.body, 'base64').toString('utf-8')
         : event.body || '{}';
-    const { type, products, settings, admins, newImage } = JSON.parse(rawBody);
+    const { type, products, settings, admins, newImage, changes } = JSON.parse(rawBody);
     const githubToken = process.env.GITHUB_TOKEN || '';
 
     // 1. Handle image upload if present
@@ -372,6 +406,37 @@ export const handler: Handler = async (event) => {
           message: githubToken
             ? 'Admin whitelist saved and committed to GitHub. Netlify deploy triggered!'
             : 'Admin whitelist saved locally (Dev Mode).',
+        }),
+      };
+    }
+
+    // 5. Handle changes audit log update
+    if (type === 'changes' && Array.isArray(changes)) {
+      const existingChanges = await loadPersistedChanges(event);
+      const byId = new Map<string, any>();
+      for (const item of [...changes, ...existingChanges]) {
+        if (item && typeof item.id === 'string' && !byId.has(item.id)) {
+          byId.set(item.id, item);
+        }
+      }
+      const mergedChanges = Array.from(byId.values());
+      const jsonString = JSON.stringify(mergedChanges, null, 2) + '\n';
+      const base64Content = Buffer.from(jsonString).toString('base64');
+
+      await saveToNetlifyBlobs(event, 'changes', jsonString);
+
+      if (githubToken) {
+        await commitToGitHub('src/data/changes.json', base64Content, 'chore(admin): update audit change log');
+      } else {
+        writeJsonWithFallback('src/data/changes.json', TMP_CHANGES_FILE, jsonString);
+      }
+
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          success: true,
+          message: 'Change log saved.',
         }),
       };
     }

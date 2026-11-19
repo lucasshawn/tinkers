@@ -15,7 +15,11 @@ import {
 import { adminPayments } from '../../services/adminPayments';
 import { PaymentsResponse } from '../../types/payments';
 
-export const PaymentsTab: React.FC = () => {
+export interface PaymentsTabProps {
+  onLogError?: (action: string, attemptedValue: string, errorMessage: string) => void;
+}
+
+export const PaymentsTab: React.FC<PaymentsTabProps> = ({ onLogError }) => {
   const [data, setData] = useState<PaymentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,11 +31,13 @@ export const PaymentsTab: React.FC = () => {
       const response = await adminPayments.fetchPayments();
       setData(response);
     } catch (err: any) {
-      setError(err.message || 'Failed to load payments data');
+      const errMsg = err.message || 'Failed to load payments data';
+      setError(errMsg);
+      onLogError?.('Load Payments', 'Stripe payments sync', errMsg);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onLogError]);
 
   useEffect(() => {
     loadData();

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, ArrowLeft, Layers, Users, CreditCard, Palette, AlertCircle, X, CheckCircle2 } from 'lucide-react';
+import { LogOut, ArrowLeft, Layers, Users, CreditCard, Palette, AlertCircle, X, CheckCircle2, History } from 'lucide-react';
 import { adminAuth, AdminSession } from '../../services/adminAuth';
 import { adminApi } from '../../services/adminApi';
 import { AdminLoginCard } from './AdminLoginCard';
@@ -7,13 +7,25 @@ import { AdminsTab } from './AdminsTab';
 import { InventoryTab } from './InventoryTab';
 import { PaymentsTab } from './PaymentsTab';
 import { ContentTab } from './ContentTab';
+import { ChangesTab } from './ChangesTab';
 import { useSettings } from '../../context/SettingsContext';
 import initialProductsData from '../../data/products.json';
-import { Product } from '../../types';
+import initialChangesData from '../../data/changes.json';
+import { Product, ChangeLogEntry } from '../../types';
 import { SiteSettings } from '../../types/settings';
 import { getStoredProducts, saveStoredProducts, PRODUCTS_STORAGE_KEY } from '../../utils/productUtils';
+import {
+  getStoredChanges,
+  saveStoredChanges,
+  mergeChanges,
+  diffInventoryChanges,
+  diffSettingsChanges,
+  diffAdminsChanges,
+  createErrorLogEntry,
+  describeInventoryAttempt,
+} from '../../utils/changeLogUtils';
 
-type AdminTab = 'admins' | 'catalog' | 'payments' | 'content';
+type AdminTab = 'admins' | 'catalog' | 'payments' | 'content' | 'changes';
 
 export const AdminPortal: React.FC = () => {
   const [session, setSession] = useState<AdminSession | null>(() => adminAuth.getSession());
@@ -23,17 +35,27 @@ export const AdminPortal: React.FC = () => {
     const defaults = Array.isArray(raw) ? raw : [];
     return getStoredProducts(defaults);
   });
+  const [changes, setChanges] = useState<ChangeLogEntry[]>(() => {
+    const defaults = Array.isArray(initialChangesData) ? (initialChangesData as ChangeLogEntry[]) : [];
+    return getStoredChanges(defaults);
+  });
   const { settings, updateSettings } = useSettings();
   const [notification, setNotification] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (import.meta.env.MODE === 'test') return;
-    if (localStorage.getItem(PRODUCTS_STORAGE_KEY)) return;
     adminApi.loadStoreData().then((data) => {
-      if (data?.products && Array.isArray(data.products)) {
+      if (!localStorage.getItem(PRODUCTS_STORAGE_KEY) && data?.products && Array.isArray(data.products)) {
         setProducts(data.products);
         saveStoredProducts(data.products);
+      }
+      if (data?.changes && Array.isArray(data.changes)) {
+        setChanges((prev) => {
+          const merged = mergeChanges(prev, data.changes!);
+          saveStoredChanges(merged);
+          return merged;
+        });
       }
     });
   }, []);
@@ -47,11 +69,28 @@ export const AdminPortal: React.FC = () => {
     setSession(null);
   };
 
+  const recordChanges = (newEntries: ChangeLogEntry[]) => {
+    if (newEntries.length === 0) return;
+    setChanges((prev) => {
+      const updated = mergeChanges(prev, newEntries);
+      saveStoredChanges(updated);
+      return updated;
+    });
+    adminApi.saveChanges(newEntries).catch(() => {});
+  };
+
+  const recordError = (action: string, attemptedValue: string, errMsg: string) => {
+    const entry = createErrorLogEntry(session.email, action, attemptedValue, errMsg);
+    recordChanges([entry]);
+  };
+
   const handleSaveInventory = async (
     updated: Product[],
     newImage?: { filename: string; base64Data: string }
   ) => {
     setErrorMessage(null);
+    const previousProducts = products;
+    const diffEntries = diffInventoryChanges(session.email, previousProducts, updated);
 
     // If a new image was uploaded, embed its data URL into the local catalog so it renders immediately
     // even before a static site rebuild finishes.
@@ -70,37 +109,50 @@ export const AdminPortal: React.FC = () => {
 
     try {
       const res = await adminApi.saveInventory(updated, newImage);
+      recordChanges(diffEntries);
       setNotification(res.message);
       setTimeout(() => setNotification(null), 5000);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to save inventory');
+      const errMsg = err.message || 'Failed to save inventory';
+      setErrorMessage(errMsg);
+      recordError('Save Inventory', describeInventoryAttempt(previousProducts, updated), errMsg);
     }
   };
 
   const handleSaveSettings = async (newSettings: SiteSettings) => {
     setErrorMessage(null);
+    const previousSettings = settings;
+    const diffEntries = diffSettingsChanges(session.email, previousSettings, newSettings);
     updateSettings(newSettings);
     try {
       const res = await adminApi.saveSettings(newSettings);
+      recordChanges(diffEntries);
       setNotification(res.message);
       setTimeout(() => setNotification(null), 5000);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to save settings');
+      const errMsg = err.message || 'Failed to save settings';
+      setErrorMessage(errMsg);
+      recordError('Save Site Content', 'Site settings update', errMsg);
     }
   };
 
   const handleSaveAdmins = async (updatedAdmins: string[]) => {
     setErrorMessage(null);
+    const previousAdmins = settings.admins || [];
+    const diffEntries = diffAdminsChanges(session.email, previousAdmins, updatedAdmins);
     updateSettings({
       ...settings,
       admins: updatedAdmins,
     });
     try {
       const res = await adminApi.saveAdmins(updatedAdmins);
+      recordChanges(diffEntries);
       setNotification(res.message);
       setTimeout(() => setNotification(null), 5000);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to save admin whitelist');
+      const errMsg = err.message || 'Failed to save admin whitelist';
+      setErrorMessage(errMsg);
+      recordError('Save Admin Whitelist', updatedAdmins.join(', '), errMsg);
     }
   };
 
@@ -230,6 +282,18 @@ export const AdminPortal: React.FC = () => {
             <Palette className="w-4 h-4" />
             <span>🎨 Manage Site Content</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('changes')}
+            className={`font-bubble text-sm sm:text-base font-bold px-4 sm:px-5 py-2.5 rounded-full transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'changes'
+                ? 'bg-weeble-pink text-white shadow-pillow scale-102'
+                : 'bg-white text-weeble-text border border-pink-200 hover:bg-weeble-pinkWash'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>📋 Changes</span>
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -238,6 +302,7 @@ export const AdminPortal: React.FC = () => {
             admins={settings.admins || []}
             currentAdminEmail={session.email}
             onSave={handleSaveAdmins}
+            onLogError={recordError}
           />
         )}
 
@@ -249,7 +314,7 @@ export const AdminPortal: React.FC = () => {
         )}
 
         {activeTab === 'payments' && (
-          <PaymentsTab />
+          <PaymentsTab onLogError={recordError} />
         )}
 
         {activeTab === 'content' && (
@@ -257,6 +322,10 @@ export const AdminPortal: React.FC = () => {
             settings={settings}
             onSave={handleSaveSettings}
           />
+        )}
+
+        {activeTab === 'changes' && (
+          <ChangesTab changes={changes} />
         )}
       </main>
     </div>

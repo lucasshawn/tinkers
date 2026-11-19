@@ -1,4 +1,5 @@
 export * from './settings';
+export * from './changes';
 
 export type VariantType = 'magnet' | 'keychain';
 

@@ -250,4 +250,76 @@ describe('AdminPortal', () => {
     expect(screen.queryByText(/Weebles Studio Admin/i)).not.toBeInTheDocument();
     expect(adminAuth.getSession()).toBeNull();
   });
+
+  it('logs changes line-by-line in the Changes tab when edits are saved', async () => {
+    adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
+    vi.spyOn(adminApi, 'saveAdmins').mockResolvedValue({
+      success: true,
+      message: 'Admin whitelist saved successfully!',
+    });
+    vi.spyOn(adminApi, 'saveChanges').mockResolvedValue({
+      success: true,
+      message: 'Change log saved.',
+    });
+
+    render(
+      <SettingsProvider>
+        <AdminPortal />
+      </SettingsProvider>
+    );
+
+    // Add a new admin
+    fireEvent.click(screen.getByRole('button', { name: /Manage Admins/i }));
+    fireEvent.change(screen.getByPlaceholderText(/friend@gmail.com/i), {
+      target: { value: 'logger@weebles.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Add Admin/i }));
+
+    await waitFor(() => {
+      expect(adminApi.saveAdmins).toHaveBeenCalled();
+    });
+
+    // Switch to Changes tab and verify log row
+    fireEvent.click(screen.getByRole('button', { name: /Changes/i }));
+    expect(screen.getByText('Admin Whitelist - Added Admin')).toBeInTheDocument();
+    expect(screen.getByText('logger@weebles.com')).toBeInTheDocument();
+  });
+
+  it('logs errors in the Changes tab when an admin action or save fails', async () => {
+    adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
+    vi.spyOn(adminApi, 'saveInventory').mockRejectedValue(new Error('GitHub API 500 error'));
+    vi.spyOn(adminApi, 'saveChanges').mockResolvedValue({
+      success: true,
+      message: 'Change log saved.',
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(
+      <SettingsProvider>
+        <AdminPortal />
+      </SettingsProvider>
+    );
+
+    // Trigger failed inventory delete
+    const deleteBtns = screen.getAllByRole('button', { name: /Delete/i });
+    fireEvent.click(deleteBtns[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/GitHub API 500 error/i)).toBeInTheDocument();
+    });
+
+    // Also trigger an admin email validation error
+    fireEvent.click(screen.getByRole('button', { name: /Manage Admins/i }));
+    fireEvent.change(screen.getByPlaceholderText(/friend@gmail.com/i), {
+      target: { value: 'invalid-email' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Add Admin/i }));
+
+    // Open Changes tab and verify both errors are logged
+    fireEvent.click(screen.getByRole('button', { name: /Changes/i }));
+    expect(screen.getByText('Error: Save Inventory')).toBeInTheDocument();
+    expect(screen.getByText('ERROR: GitHub API 500 error')).toBeInTheDocument();
+    expect(screen.getByText('Error: Add Admin')).toBeInTheDocument();
+    expect(screen.getByText(/ERROR: Please enter a valid email address/i)).toBeInTheDocument();
+  });
 });
