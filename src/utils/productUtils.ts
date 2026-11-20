@@ -1,4 +1,4 @@
-import { CategoryOption, Product, VariantType } from '../types';
+import { CategoryOption, Product, ProductImageSlide, VariantType } from '../types';
 
 export const DEFAULT_CATEGORIES: CategoryOption[] = [
   { id: 'animals', label: 'Critters', emoji: '🐰' },
@@ -148,6 +148,43 @@ export function formatProductPriceSummary(product: Product): string {
   return prices
     .map((p) => `${p.variant === 'magnet' ? '🧲' : '🔑'} ${formatPrice(p.price)}`)
     .join(' / ');
+}
+
+export function getProductVariantImage(product: Product, variant?: VariantType): string {
+  if (variant) {
+    const variantImg = product.variantImages?.[variant]?.trim();
+    if (variantImg) return variantImg;
+  }
+  return product.images?.[0] || '';
+}
+
+export function getProductGallery(product: Product): ProductImageSlide[] {
+  const slides: ProductImageSlide[] = [];
+  const baseImage = product.images?.[0]?.trim();
+  if (baseImage) {
+    slides.push({ src: baseImage, label: 'Base' });
+  }
+  for (const variant of product.availableVariants || []) {
+    const variantImg = product.variantImages?.[variant]?.trim();
+    if (variantImg) {
+      slides.push({
+        src: variantImg,
+        label: variant === 'magnet' ? 'Magnet' : 'Keychain',
+        variant,
+      });
+    }
+  }
+  return slides;
+}
+
+export function countProductVariantPhotos(product: Product): number {
+  let count = 0;
+  for (const variant of product.availableVariants || []) {
+    if (product.variantImages?.[variant]?.trim()) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 export const NEW_PRODUCT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;

@@ -5,6 +5,19 @@ export type VariantType = 'magnet' | 'keychain';
 
 export type VariantPrices = Partial<Record<VariantType, number>>;
 
+export type VariantImages = Partial<Record<VariantType, string>>;
+
+export interface UploadedImage {
+  filename: string;
+  base64Data: string;
+}
+
+export interface ProductImageSlide {
+  src: string;
+  label: string;
+  variant?: VariantType;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -12,6 +25,7 @@ export interface Product {
   price: number;
   variantPrices?: VariantPrices;
   images: string[];
+  variantImages?: VariantImages;
   categories?: string[];
   category?: string;
   availableVariants: VariantType[];
