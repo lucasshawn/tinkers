@@ -304,6 +304,58 @@ describe('admin-save Netlify Function', () => {
     expect(mockFetch).toHaveBeenCalledTimes(4);
   });
 
+  it('commits multiple uploaded images from newImages array to GitHub and in dev mode', async () => {
+    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+    const devEvent = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'inventory',
+        products: [],
+        newImages: [
+          { filename: 'base.png', base64Data: 'data:image/png;base64,YmFzZQ==' },
+          { filename: 'p1-magnet-m.png', base64Data: 'data:image/png;base64,bWFnbmV0' },
+          { filename: 'p1-keychain-k.png', base64Data: 'data:image/png;base64,a2V5Y2hhaW4=' },
+        ],
+      }),
+    };
+
+    const devRes = (await handler(devEvent as any, {} as any)) as any;
+    expect(devRes.statusCode).toBe(200);
+    expect(fs.writeFileSync).toHaveBeenCalledWith(expect.stringContaining('base.png'), expect.any(Buffer));
+    expect(fs.writeFileSync).toHaveBeenCalledWith(expect.stringContaining('p1-magnet-m.png'), expect.any(Buffer));
+    expect(fs.writeFileSync).toHaveBeenCalledWith(expect.stringContaining('p1-keychain-k.png'), expect.any(Buffer));
+
+    // Also verify GitHub commits for multiple images
+    process.env.GITHUB_TOKEN = 'ghp_test_token_123';
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) }) // GET img 1
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ commit: { sha: 'img1-sha' } }) }) // PUT img 1
+      .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) }) // GET img 2
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ commit: { sha: 'img2-sha' } }) }) // PUT img 2
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ sha: 'products-sha' }) }) // GET products.json
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ commit: { sha: 'new-products-sha' } }) }); // PUT products.json
+    globalThis.fetch = mockFetch;
+
+    const ghEvent = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'inventory',
+        products: [],
+        newImages: [
+          { filename: 'p1-magnet-m.jpg', base64Data: 'data:image/jpeg;base64,bWFnbmV0' },
+          { filename: 'p1-keychain-k.jpg', base64Data: 'data:image/jpeg;base64,a2V5Y2hhaW4=' },
+        ],
+      }),
+    };
+
+    const ghRes = (await handler(ghEvent as any, {} as any)) as any;
+    expect(ghRes.statusCode).toBe(200);
+    expect(mockFetch).toHaveBeenCalledTimes(6);
+  });
+
   it('returns 500 when GitHub commit API returns error', async () => {
     process.env.GITHUB_TOKEN = 'ghp_test_token_123';
 
@@ -908,10 +960,16 @@ describe('adminApi client service', () => {
     });
     globalThis.fetch = mockFetch;
 
-    const result = await adminApi.saveInventory(mockProducts, {
-      filename: 'cat-new.jpg',
-      base64Data: 'data:image/jpeg;base64,1234',
-    });
+    const result = await adminApi.saveInventory(mockProducts, [
+      {
+        filename: 'cat-new.jpg',
+        base64Data: 'data:image/jpeg;base64,1234',
+      },
+      {
+        filename: 'cat-1-magnet-m.jpg',
+        base64Data: 'data:image/jpeg;base64,5678',
+      },
+    ]);
 
     expect(result.success).toBe(true);
     expect(result.message).toBe('Saved successfully');
@@ -926,10 +984,16 @@ describe('adminApi client service', () => {
         body: JSON.stringify({
           type: 'inventory',
           products: mockProducts,
-          newImage: {
-            filename: 'cat-new.jpg',
-            base64Data: 'data:image/jpeg;base64,1234',
-          },
+          newImages: [
+            {
+              filename: 'cat-new.jpg',
+              base64Data: 'data:image/jpeg;base64,1234',
+            },
+            {
+              filename: 'cat-1-magnet-m.jpg',
+              base64Data: 'data:image/jpeg;base64,5678',
+            },
+          ],
         }),
       })
     );

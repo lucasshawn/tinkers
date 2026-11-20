@@ -1,4 +1,4 @@
-import { Product, ChangeLogEntry } from '../types';
+import { Product, ChangeLogEntry, UploadedImage } from '../types';
 import { CategoryOption, SiteSettings } from '../types/settings';
 import { adminAuth } from './adminAuth';
 
@@ -22,10 +22,18 @@ export const adminApi = {
 
   async saveInventory(
     products: Product[],
-    newImage?: { filename: string; base64Data: string }
+    newImages?: UploadedImage[]
   ): Promise<{ success: boolean; message: string }> {
     const session = adminAuth.getSession();
     if (!session) throw new Error('Not authenticated');
+
+    const payload: Record<string, unknown> = {
+      type: 'inventory',
+      products,
+    };
+    if (newImages && newImages.length > 0) {
+      payload.newImages = newImages;
+    }
 
     const res = await fetch('/.netlify/functions/admin-save', {
       method: 'POST',
@@ -33,11 +41,7 @@ export const adminApi = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.token}`,
       },
-      body: JSON.stringify({
-        type: 'inventory',
-        products,
-        newImage,
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {

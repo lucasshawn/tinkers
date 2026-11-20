@@ -310,14 +310,21 @@ export const handler: Handler = async (event) => {
       event.isBase64Encoded && event.body
         ? Buffer.from(event.body, 'base64').toString('utf-8')
         : event.body || '{}';
-    const { type, products, settings, admins, categories, newImage, changes } = JSON.parse(rawBody);
+    const { type, products, settings, admins, categories, newImage, newImages, changes } = JSON.parse(rawBody);
     const githubToken = process.env.GITHUB_TOKEN || '';
 
-    // 1. Handle image upload if present
-    if (newImage && newImage.filename && newImage.base64Data) {
-      const cleanFilename = path.basename(newImage.filename).replace(/[^a-zA-Z0-9._-]/g, '');
+    // 1. Handle image upload(s) if present (supports newImages[] and legacy single newImage)
+    const imagesToUpload: Array<{ filename: string; base64Data: string }> = Array.isArray(newImages)
+      ? newImages
+      : newImage
+      ? [newImage]
+      : [];
+
+    for (const img of imagesToUpload) {
+      if (!img || !img.filename || !img.base64Data) continue;
+      const cleanFilename = path.basename(img.filename).replace(/[^a-zA-Z0-9._-]/g, '');
       const imagePath = `public/images/products/${cleanFilename}`;
-      const rawBase64 = newImage.base64Data.replace(/^data:image\/[\w+.-]+;base64,/, '');
+      const rawBase64 = img.base64Data.replace(/^data:image\/[\w+.-]+;base64,/, '');
 
       if (githubToken) {
         await commitToGitHub(imagePath, rawBase64, `chore(admin): upload product image ${cleanFilename}`);

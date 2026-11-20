@@ -119,6 +119,57 @@ describe('changeLogUtils', () => {
     it('returns empty array when no product fields changed', () => {
       expect(diffInventoryChanges(adminEmail, [baseProduct], [{ ...baseProduct }], fixedNow)).toEqual([]);
     });
+
+    it('logs Magnet Photo and Keychain Photo additions, edits, and deletions', () => {
+      const withVariantPhotos: Product = {
+        ...baseProduct,
+        variantImages: {
+          magnet: '/images/products/bee-magnet.jpg',
+          keychain: 'data:image/png;base64,abc123',
+        },
+      };
+
+      const addedEntries = diffInventoryChanges(
+        adminEmail,
+        [baseProduct],
+        [withVariantPhotos],
+        fixedNow
+      );
+      expect(addedEntries.map((e) => ({ change: e.change, comment: e.comment }))).toEqual([
+        {
+          change: "Weeble 'Chubby Bumblebee' - Magnet Photo",
+          comment: 'Old: (none) -> New: /images/products/bee-magnet.jpg',
+        },
+        {
+          change: "Weeble 'Chubby Bumblebee' - Keychain Photo",
+          comment: 'Old: (none) -> New: [uploaded image]',
+        },
+      ]);
+
+      const editedAndDeleted: Product = {
+        ...baseProduct,
+        variantImages: {
+          magnet: '/images/products/bee-magnet-v2.jpg',
+        },
+      };
+
+      const editDeleteEntries = diffInventoryChanges(
+        adminEmail,
+        [withVariantPhotos],
+        [editedAndDeleted],
+        fixedNow
+      );
+      expect(editDeleteEntries.map((e) => ({ change: e.change, comment: e.comment }))).toEqual([
+        {
+          change: "Weeble 'Chubby Bumblebee' - Magnet Photo",
+          comment: 'Old: /images/products/bee-magnet.jpg -> New: /images/products/bee-magnet-v2.jpg',
+        },
+        {
+          change: "Weeble 'Chubby Bumblebee' - Keychain Photo",
+          comment: 'Old: [uploaded image] -> New: (none)',
+        },
+      ]);
+    });
   });
 
   describe('diffSettingsChanges', () => {

@@ -104,7 +104,7 @@ export function formatLocalTimestamp(isoString: string): string {
 }
 
 function summarizeImage(img?: string): string {
-  if (!img) return '(none)';
+  if (!img || !img.trim()) return '(none)';
   if (img.startsWith('data:image/')) return '[uploaded image]';
   return img;
 }
@@ -181,6 +181,16 @@ export function diffInventoryChanges(
         label: 'Product Photo',
         oldVal: summarizeImage(oldP.images?.[0]),
         newVal: summarizeImage(newP.images?.[0]),
+      },
+      {
+        label: 'Magnet Photo',
+        oldVal: summarizeImage(oldP.variantImages?.magnet),
+        newVal: summarizeImage(newP.variantImages?.magnet),
+      },
+      {
+        label: 'Keychain Photo',
+        oldVal: summarizeImage(oldP.variantImages?.keychain),
+        newVal: summarizeImage(newP.variantImages?.keychain),
       },
     ];
 

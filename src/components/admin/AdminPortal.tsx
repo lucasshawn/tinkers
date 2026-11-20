@@ -11,7 +11,7 @@ import { ChangesTab } from './ChangesTab';
 import { useSettings, SETTINGS_STORAGE_KEY } from '../../context/SettingsContext';
 import initialProductsData from '../../data/products.json';
 import initialChangesData from '../../data/changes.json';
-import { Product, ChangeLogEntry } from '../../types';
+import { Product, ChangeLogEntry, UploadedImage, VariantImages, VariantType } from '../../types';
 import { CategoryOption, SiteSettings } from '../../types/settings';
 import {
   DEFAULT_CATEGORIES,
@@ -94,21 +94,44 @@ export const AdminPortal: React.FC = () => {
 
   const handleSaveInventory = async (
     updated: Product[],
-    newImage?: { filename: string; base64Data: string }
+    newImages?: UploadedImage[]
   ) => {
     setErrorMessage(null);
     const previousProducts = products;
     const diffEntries = diffInventoryChanges(session.email, previousProducts, updated);
 
-    // If a new image was uploaded, embed its data URL into the local catalog so it renders immediately
+    // If new images were uploaded, embed their data URLs into the local catalog so they render immediately
     // even before a static site rebuild finishes.
+    const imageMap = new Map<string, string>();
+    if (newImages && newImages.length > 0) {
+      for (const img of newImages) {
+        if (img.filename && img.base64Data) {
+          imageMap.set(`/images/products/${img.filename}`, img.base64Data);
+        }
+      }
+    }
+
     const localUpdated =
-      newImage && newImage.filename && newImage.base64Data
-        ? updated.map((p) =>
-            p.images[0] === `/images/products/${newImage.filename}`
-              ? { ...p, images: [newImage.base64Data] }
-              : p
-          )
+      imageMap.size > 0
+        ? updated.map((p) => {
+            const nextBase = p.images.length > 0 ? (imageMap.get(p.images[0]) ?? p.images[0]) : undefined;
+            let nextVariantImages = p.variantImages;
+            if (p.variantImages) {
+              const mapped: VariantImages = {};
+              for (const key of Object.keys(p.variantImages) as VariantType[]) {
+                const val = p.variantImages[key];
+                if (val) {
+                  mapped[key] = imageMap.get(val) ?? val;
+                }
+              }
+              nextVariantImages = mapped;
+            }
+            return {
+              ...p,
+              images: nextBase !== undefined ? [nextBase, ...p.images.slice(1)] : p.images,
+              ...(nextVariantImages ? { variantImages: nextVariantImages } : {}),
+            };
+          })
         : updated;
 
     // Optimistically update catalog and localStorage immediately so new/edited items appear right away
@@ -116,7 +139,7 @@ export const AdminPortal: React.FC = () => {
     saveStoredProducts(localUpdated);
 
     try {
-      const res = await adminApi.saveInventory(updated, newImage);
+      const res = await adminApi.saveInventory(updated, newImages);
       recordChanges(diffEntries);
       setNotification(res.message);
       setTimeout(() => setNotification(null), 5000);
