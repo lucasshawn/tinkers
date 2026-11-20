@@ -1,6 +1,12 @@
-import React, { useState } from 'react';
-import { Save, CheckCircle2, Mail, Share2, Sparkles, Megaphone } from 'lucide-react';
-import { SiteSettings } from '../../types/settings';
+import React, { useEffect, useRef, useState } from 'react';
+import { Save, CheckCircle2, Mail, Sparkles, Megaphone } from 'lucide-react';
+import { SiteSettings, SocialLink } from '../../types/settings';
+import {
+  isSafeHttpUrl,
+  normalizeSocialLinks,
+  syncLegacySocials,
+} from '../../utils/socialPlatforms';
+import { SocialLinksEditor } from './SocialLinksEditor';
 
 export interface ContentTabProps {
   settings: SiteSettings;
@@ -12,32 +18,84 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
   const [bannerText, setBannerText] = useState(settings.announcementBanner?.text ?? '');
   const [contactEmail, setContactEmail] = useState(settings.contactEmail);
   const [customOrderEmail, setCustomOrderEmail] = useState(settings.customOrderEmail);
-  const [tiktok, setTiktok] = useState(settings.socials.tiktok);
-  const [instagram, setInstagram] = useState(settings.socials.instagram);
-  const [facebookMarketplace, setFacebookMarketplace] = useState(settings.socials.facebookMarketplace);
+  const [socialLinksEnabled, setSocialLinksEnabled] = useState(
+    settings.socialLinksEnabled ?? true
+  );
+  const [socialLinks, setSocialLinks] = useState<SocialLink[]>(() =>
+    normalizeSocialLinks(settings)
+  );
+  const [socialValidationError, setSocialValidationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const hasEditedRef = useRef(false);
+
+  useEffect(() => {
+    if (hasEditedRef.current) return;
+    setBannerEnabled(settings.announcementBanner?.enabled ?? false);
+    setBannerText(settings.announcementBanner?.text ?? '');
+    setContactEmail(settings.contactEmail);
+    setCustomOrderEmail(settings.customOrderEmail);
+    setSocialLinksEnabled(settings.socialLinksEnabled ?? true);
+    setSocialLinks(normalizeSocialLinks(settings));
+  }, [settings]);
+
+  const handleLinksChange = (nextLinks: SocialLink[]) => {
+    hasEditedRef.current = true;
+    setSocialLinks(nextLinks);
+    if (socialValidationError) {
+      setSocialValidationError(null);
+    }
+  };
+
+  const handleSocialLinksEnabledChange = (enabled: boolean) => {
+    hasEditedRef.current = true;
+    setSocialLinksEnabled(enabled);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaving(true);
     setSavedSuccess(false);
+
+    const invalidEnabled = socialLinks.filter(
+      (link) => link.enabled && !isSafeHttpUrl(link.url)
+    );
+    if (invalidEnabled.length > 0) {
+      setSocialValidationError(
+        'Please enter a valid http(s) URL for all enabled social links (or toggle incomplete links off).'
+      );
+      return;
+    }
+
+    setSocialValidationError(null);
+    setIsSaving(true);
+
+    const cleanedLinks: SocialLink[] = socialLinks.map((link) => {
+      const label = link.label?.trim();
+      const subtitle = link.subtitle?.trim();
+      return {
+        id: link.id,
+        platform: link.platform,
+        url: link.url.trim(),
+        enabled: link.enabled,
+        ...(label ? { label } : {}),
+        ...(subtitle ? { subtitle } : {}),
+      };
+    });
 
     try {
       await onSave({
         ...settings,
         contactEmail,
         customOrderEmail,
-        socials: {
-          tiktok,
-          instagram,
-          facebookMarketplace,
-        },
+        socialLinksEnabled,
+        socialLinks: cleanedLinks,
+        socials: syncLegacySocials(cleanedLinks, settings.socials),
         announcementBanner: {
           enabled: bannerEnabled,
           text: bannerText,
         },
       });
+      hasEditedRef.current = false;
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 4000);
     } finally {
@@ -74,7 +132,10 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
               id="bannerEnabled"
               type="checkbox"
               checked={bannerEnabled}
-              onChange={(e) => setBannerEnabled(e.target.checked)}
+              onChange={(e) => {
+                hasEditedRef.current = true;
+                setBannerEnabled(e.target.checked);
+              }}
               aria-label="Enable Announcement Banner"
               className="w-5 h-5 rounded-lg text-weeble-pink accent-weeble-pink focus:ring-pink-300 border-pink-300 transition-all cursor-pointer"
             />
@@ -91,7 +152,10 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
               id="bannerText"
               type="text"
               value={bannerText}
-              onChange={(e) => setBannerText(e.target.value)}
+              onChange={(e) => {
+                hasEditedRef.current = true;
+                setBannerText(e.target.value);
+              }}
               placeholder="🌸 Fall Restock is now LIVE! Handmade charms, magnets & keychains"
               className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3.5 py-2.5 text-weeble-text focus:outline-none focus:border-weeble-pink"
             />
@@ -132,7 +196,10 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
               type="email"
               required
               value={contactEmail}
-              onChange={(e) => setContactEmail(e.target.value)}
+              onChange={(e) => {
+                hasEditedRef.current = true;
+                setContactEmail(e.target.value);
+              }}
               className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3.5 py-2.5 text-weeble-text focus:outline-none focus:border-weeble-pink"
             />
           </div>
@@ -146,69 +213,24 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
               type="email"
               required
               value={customOrderEmail}
-              onChange={(e) => setCustomOrderEmail(e.target.value)}
+              onChange={(e) => {
+                hasEditedRef.current = true;
+                setCustomOrderEmail(e.target.value);
+              }}
               className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3.5 py-2.5 text-weeble-text focus:outline-none focus:border-weeble-pink"
             />
           </div>
         </div>
       </div>
 
-      {/* Social Media Links */}
-      <div className="bg-white rounded-3xl border-2 border-pink-200 p-6 shadow-xs">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-2xl bg-pink-100 flex items-center justify-center text-weeble-pink shrink-0">
-            <Share2 className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="font-bubble text-lg font-bold text-weeble-text">Social Media Exposure Links</h3>
-            <p className="text-xs text-weeble-textMuted">Links displayed on the homepage social strip and footer</p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="tiktok" className="block text-xs font-bold text-weeble-text mb-1">
-              TikTok Profile URL
-            </label>
-            <input
-              id="tiktok"
-              type="url"
-              value={tiktok}
-              onChange={(e) => setTiktok(e.target.value)}
-              placeholder="https://tiktok.com/@weebles_clay"
-              className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3.5 py-2.5 text-weeble-text focus:outline-none focus:border-weeble-pink"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="instagram" className="block text-xs font-bold text-weeble-text mb-1">
-              Instagram Profile URL
-            </label>
-            <input
-              id="instagram"
-              type="url"
-              value={instagram}
-              onChange={(e) => setInstagram(e.target.value)}
-              placeholder="https://instagram.com/weebles_clay"
-              className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3.5 py-2.5 text-weeble-text focus:outline-none focus:border-weeble-pink"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="facebookMarketplace" className="block text-xs font-bold text-weeble-text mb-1">
-              Facebook Marketplace URL
-            </label>
-            <input
-              id="facebookMarketplace"
-              type="url"
-              value={facebookMarketplace}
-              onChange={(e) => setFacebookMarketplace(e.target.value)}
-              placeholder="https://facebook.com/marketplace"
-              className="w-full text-sm bg-weeble-pinkWash border border-pink-200 rounded-xl px-3.5 py-2.5 text-weeble-text focus:outline-none focus:border-weeble-pink"
-            />
-          </div>
-        </div>
-      </div>
+      {/* Social Media Links Editor */}
+      <SocialLinksEditor
+        enabled={socialLinksEnabled}
+        links={socialLinks}
+        validationError={socialValidationError}
+        onEnabledChange={handleSocialLinksEnabledChange}
+        onLinksChange={handleLinksChange}
+      />
 
       <button
         type="submit"

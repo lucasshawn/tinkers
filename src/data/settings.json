@@ -6,6 +6,33 @@
     "instagram": "https://instagram.com/weebles_clay",
     "facebookMarketplace": "https://facebook.com/marketplace"
   },
+  "socialLinksEnabled": true,
+  "socialLinks": [
+    {
+      "id": "tiktok-default",
+      "platform": "tiktok",
+      "url": "https://tiktok.com/@weebles_clay",
+      "enabled": true,
+      "label": "TikTok",
+      "subtitle": "@weebles_clay • ASMR & BTS"
+    },
+    {
+      "id": "instagram-default",
+      "platform": "instagram",
+      "url": "https://instagram.com/weebles_clay",
+      "enabled": true,
+      "label": "Instagram",
+      "subtitle": "@weebles_clay • Gallery & Drops"
+    },
+    {
+      "id": "facebook-marketplace-default",
+      "platform": "facebookMarketplace",
+      "url": "https://facebook.com/marketplace",
+      "enabled": true,
+      "label": "Facebook Marketplace",
+      "subtitle": "Local Listings & Events"
+    }
+  ],
   "announcementBanner": {
     "enabled": false,
     "text": ""

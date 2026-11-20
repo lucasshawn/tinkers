@@ -44,7 +44,7 @@ export const AdminPortal: React.FC = () => {
     const defaults = Array.isArray(initialChangesData) ? (initialChangesData as ChangeLogEntry[]) : [];
     return getStoredChanges(defaults);
   });
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, hydrateSettings } = useSettings();
   const [notification, setNotification] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -56,7 +56,7 @@ export const AdminPortal: React.FC = () => {
         saveStoredProducts(data.products);
       }
       if (!localStorage.getItem(SETTINGS_STORAGE_KEY) && data?.settings && typeof data.settings === 'object') {
-        updateSettings(data.settings);
+        hydrateSettings(data.settings);
       }
       if (data?.changes && Array.isArray(data.changes)) {
         setChanges((prev) => {
@@ -66,7 +66,7 @@ export const AdminPortal: React.FC = () => {
         });
       }
     });
-  }, []);
+  }, [hydrateSettings]);
 
   if (!session) {
     return <AdminLoginCard onLoginSuccess={(s) => setSession(s)} />;

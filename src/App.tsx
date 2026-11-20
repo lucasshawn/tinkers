@@ -20,7 +20,7 @@ import { adminApi } from './services/adminApi';
 
 export const AppContent: React.FC = () => {
   const { items, setIsCartOpen } = useCart();
-  const { settings, updateSettings } = useSettings();
+  const { settings, hydrateSettings } = useSettings();
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
   const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
@@ -34,19 +34,20 @@ export const AppContent: React.FC = () => {
 
   useEffect(() => {
     if (import.meta.env.MODE === 'test') return;
-    const hasLocalProducts = Boolean(localStorage.getItem(PRODUCTS_STORAGE_KEY));
-    const hasLocalSettings = Boolean(localStorage.getItem(SETTINGS_STORAGE_KEY));
-    if (hasLocalProducts && hasLocalSettings) return;
+    const hasStoredProducts = Boolean(localStorage.getItem(PRODUCTS_STORAGE_KEY));
+    const hasStoredSettings = Boolean(localStorage.getItem(SETTINGS_STORAGE_KEY));
+    if (hasStoredProducts && hasStoredSettings) return;
+
     adminApi.loadStoreData().then((data) => {
-      if (!hasLocalProducts && data?.products && Array.isArray(data.products)) {
+      if (!hasStoredProducts && data?.products && Array.isArray(data.products)) {
         setProducts(data.products);
         saveStoredProducts(data.products);
       }
-      if (!hasLocalSettings && data?.settings && typeof data.settings === 'object') {
-        updateSettings(data.settings);
+      if (!hasStoredSettings && data?.settings && typeof data.settings === 'object') {
+        hydrateSettings(data.settings);
       }
     });
-  }, []);
+  }, [hydrateSettings]);
 
   // Check if viewing order success
   const isSuccessPage =

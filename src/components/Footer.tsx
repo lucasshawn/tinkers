@@ -1,10 +1,13 @@
 import React from 'react';
 import { Heart } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
+import { getSocialLinkLabel, getVisibleSocialLinks } from '../utils/socialPlatforms';
+import { SocialIconBadge } from './SocialIcon';
 
 export const Footer: React.FC = () => {
   const { settings } = useSettings();
   const contactEmail = settings?.contactEmail || 'weeblesclay@gmail.com';
+  const visibleSocials = getVisibleSocialLinks(settings);
 
   return (
     <footer id="about" className="bg-white border-t-2 border-pink-100 pt-12 pb-8 px-4 sm:px-6 lg:px-8 mt-16">
@@ -49,6 +52,30 @@ export const Footer: React.FC = () => {
           <p className="text-xs text-weeble-textMuted mt-3">
             📦 Ships safely bubble-wrapped with collectible stickers and surprise candy!
           </p>
+
+          {visibleSocials.length > 0 && (
+            <nav
+              className="flex flex-wrap items-center gap-2 mt-4"
+              aria-label="Social media links"
+            >
+              {visibleSocials.map((link) => {
+                const label = getSocialLinkLabel(link);
+                return (
+                  <a
+                    key={link.id}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Visit us on ${label}`}
+                    title={label}
+                    className="hover:-translate-y-0.5 hover:opacity-90 transition-all rounded-xl focus:outline-none focus:ring-2 focus:ring-weeble-pink"
+                  >
+                    <SocialIconBadge platform={link.platform} size="sm" />
+                  </a>
+                );
+              })}
+            </nav>
+          )}
         </div>
       </div>
 
