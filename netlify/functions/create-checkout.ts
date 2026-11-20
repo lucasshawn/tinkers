@@ -73,12 +73,16 @@ export const handler: Handler = async (event) => {
           : item.variant === 'keychain'
           ? ' (🔑 Keychain)'
           : '';
+      const resolvedImage =
+        item.image?.trim() ||
+        (item.variant && product.variantImages?.[item.variant]?.trim()) ||
+        product.images?.[0];
       return {
         price_data: {
           currency: 'usd',
           product_data: {
             name: `${product.name}${variantLabel}`,
-            images: item.image ? [item.image] : (product.images?.[0] ? [product.images[0]] : []),
+            images: resolvedImage ? [resolvedImage] : [],
             metadata: {
               variant: item.variant || 'standard',
               productId: item.productId,

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { CartItem, Product, VariantType } from '../types';
-import { getProductVariantPrice } from '../utils/productUtils';
+import { getProductVariantImage, getProductVariantPrice } from '../utils/productUtils';
 
 export interface CartContextType {
   items: CartItem[];
@@ -61,7 +61,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: product.name,
         ...(effectiveVariant ? { variant: effectiveVariant } : {}),
         price: unitPrice,
-        image: product.images[0] || '',
+        image: getProductVariantImage(product, effectiveVariant),
         quantity: 1,
         maxQuantity,
       };

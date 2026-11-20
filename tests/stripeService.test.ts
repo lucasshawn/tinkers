@@ -292,6 +292,76 @@ describe('create-checkout Netlify Function handler', () => {
     expect(lineItems[1].price_data.product_data.name).toBe('Standalone Desk Weeble');
   });
 
+  it('uses item.image, falls back to product.variantImages[variant], and finally product.images[0]', async () => {
+    process.env.STRIPE_SECRET_KEY = 'sk_test_fake_key_123';
+    mockCreateSession.mockClear();
+    mockCreateSession.mockResolvedValue({
+      client_secret: 'cs_test_secret_mock',
+    });
+
+    vi.spyOn(adminSave, 'loadPersistedProducts').mockResolvedValue([
+      {
+        id: 'weeble-photo-test',
+        name: 'Photo Test Weeble',
+        price: 14.0,
+        availableVariants: ['magnet', 'keychain'],
+        inStock: true,
+        stockCount: 5,
+        images: ['/base.jpg'],
+        variantImages: {
+          keychain: '/keychain.jpg',
+          magnet: '   ',
+        },
+      },
+    ]);
+
+    const response = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { origin: 'https://weebles.store' },
+        body: JSON.stringify({
+          items: [
+            {
+              id: 'weeble-photo-test-keychain-explicit',
+              productId: 'weeble-photo-test',
+              name: 'Photo Test Weeble',
+              variant: 'keychain',
+              price: 14.0,
+              image: '/explicit-item.jpg',
+              quantity: 1,
+            },
+            {
+              id: 'weeble-photo-test-keychain-fallback',
+              productId: 'weeble-photo-test',
+              name: 'Photo Test Weeble',
+              variant: 'keychain',
+              price: 14.0,
+              image: '   ',
+              quantity: 1,
+            },
+            {
+              id: 'weeble-photo-test-magnet-base-fallback',
+              productId: 'weeble-photo-test',
+              name: 'Photo Test Weeble',
+              variant: 'magnet',
+              price: 14.0,
+              image: '',
+              quantity: 1,
+            },
+          ],
+        }),
+      } as any,
+      {} as any,
+      () => {}
+    )) as any;
+
+    expect(response.statusCode).toBe(200);
+    const lineItems = mockCreateSession.mock.calls[0][0].line_items;
+    expect(lineItems[0].price_data.product_data.images).toEqual(['/explicit-item.jpg']);
+    expect(lineItems[1].price_data.product_data.images).toEqual(['/keychain.jpg']);
+    expect(lineItems[2].price_data.product_data.images).toEqual(['/base.jpg']);
+  });
+
   it('returns 400 when an item productId is not found in catalog', async () => {
     const response = (await handler(
       {

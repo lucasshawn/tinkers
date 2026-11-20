@@ -234,4 +234,24 @@ describe('CartContext', () => {
     });
     expect(result.current.items[0].quantity).toBe(1);
   });
+
+  it('stores variant-specific photo on cart item when available and falls back to base photo otherwise', () => {
+    const productWithVariantPhoto: Product = {
+      ...testProduct,
+      id: 'prod-variant-img',
+      images: ['/base-bunny.jpg'],
+      variantImages: {
+        keychain: '/keychain-bunny.jpg',
+      },
+    };
+    const { result } = renderHook(() => useCart(), { wrapper });
+
+    act(() => {
+      result.current.addToCart(productWithVariantPhoto, 'keychain');
+      result.current.addToCart(productWithVariantPhoto, 'magnet');
+    });
+
+    expect(result.current.items[0].image).toBe('/keychain-bunny.jpg');
+    expect(result.current.items[1].image).toBe('/base-bunny.jpg');
+  });
 });
