@@ -276,11 +276,13 @@ describe('InventoryTab', () => {
       expect(handleSave).toHaveBeenCalledTimes(1);
     });
 
-    const [savedProducts, newImage] = handleSave.mock.calls[0];
-    expect(newImage).toEqual({
-      filename: 'rainbow.png',
-      base64Data: mockResult,
-    });
+    const [savedProducts, newImages] = handleSave.mock.calls[0];
+    expect(newImages).toEqual([
+      {
+        filename: 'rainbow.png',
+        base64Data: mockResult,
+      },
+    ]);
     expect(savedProducts[0].images[0]).toBe('/images/products/rainbow.png');
 
     window.FileReader = originalFileReader;
@@ -319,11 +321,170 @@ describe('InventoryTab', () => {
       expect(handleSave).toHaveBeenCalledTimes(1);
     });
 
-    const [savedProducts, newImage] = handleSave.mock.calls[0];
-    expect(newImage.filename).toBe('sweetstrawberry1special.png');
+    const [savedProducts, newImages] = handleSave.mock.calls[0];
+    expect(newImages).toEqual([
+      {
+        filename: 'sweetstrawberry1special.png',
+        base64Data: mockResult,
+      },
+    ]);
     expect(savedProducts[0].images[0]).toBe('/images/products/sweetstrawberry1special.png');
 
     window.FileReader = originalFileReader;
+  });
+
+  it('uploads magnet and keychain variant photos alongside base photo and passes all in newImages', async () => {
+    const handleSave = vi.fn().mockResolvedValue(undefined);
+    render(<InventoryTab products={mockProducts} onSave={handleSave} />);
+
+    const editBtns = screen.getAllByRole('button', { name: /Edit/i });
+    fireEvent.click(editBtns[0]); // Edit weeble-bee (magnet & keychain)
+
+    const originalFileReader = window.FileReader;
+    let callCount = 0;
+    const mockResults = [
+      'data:image/png;base64,bWFnbmV0',
+      'data:image/png;base64,a2V5Y2hhaW4=',
+    ];
+    class MockFileReader {
+      onload: (() => void) | null = null;
+      result: string | ArrayBuffer | null = null;
+      readAsDataURL() {
+        this.result = mockResults[callCount++] || mockResults[0];
+        if (this.onload) this.onload();
+      }
+    }
+    // @ts-expect-error Mocking FileReader
+    window.FileReader = MockFileReader;
+
+    const magnetInput = screen.getByLabelText(/Upload Magnet photo/i);
+    fireEvent.change(magnetInput, {
+      target: { files: [new File(['m'], 'photo.png', { type: 'image/png' })] },
+    });
+
+    const keychainInput = screen.getByLabelText(/Upload Keychain photo/i);
+    fireEvent.change(keychainInput, {
+      target: { files: [new File(['k'], 'photo.png', { type: 'image/png' })] },
+    });
+
+    expect(screen.getByAltText('Magnet preview')).toHaveAttribute('src', mockResults[0]);
+    expect(screen.getByAltText('Keychain preview')).toHaveAttribute('src', mockResults[1]);
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Weeble/i }));
+
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledTimes(1);
+    });
+
+    const [savedProducts, newImages] = handleSave.mock.calls[0];
+    const updatedBee: Product = savedProducts[0];
+    expect(updatedBee.variantImages).toEqual({
+      magnet: '/images/products/weeble-bee-magnet-photo.png',
+      keychain: '/images/products/weeble-bee-keychain-photo.png',
+    });
+    expect(newImages).toEqual([
+      { filename: 'weeble-bee-magnet-photo.png', base64Data: mockResults[0] },
+      { filename: 'weeble-bee-keychain-photo.png', base64Data: mockResults[1] },
+    ]);
+
+    window.FileReader = originalFileReader;
+  });
+
+  it('allows replacing (editing) and removing (deleting) existing variant photos', async () => {
+    const handleSave = vi.fn().mockResolvedValue(undefined);
+    const productsWithVariantPhotos: Product[] = [
+      {
+        ...mockProducts[0],
+        variantImages: {
+          magnet: '/images/products/bee-magnet-old.jpg',
+          keychain: '/images/products/bee-keychain-old.jpg',
+        },
+      },
+    ];
+
+    render(<InventoryTab products={productsWithVariantPhotos} onSave={handleSave} />);
+
+    // Inventory list displays variant photo count indicator
+    expect(screen.getByText(/📷 \+2 photos/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Edit/i }));
+
+    expect(screen.getByAltText('Magnet preview')).toHaveAttribute(
+      'src',
+      '/images/products/bee-magnet-old.jpg'
+    );
+    expect(screen.getByAltText('Keychain preview')).toHaveAttribute(
+      'src',
+      '/images/products/bee-keychain-old.jpg'
+    );
+
+    // Replace magnet photo
+    const originalFileReader = window.FileReader;
+    const replacementDataUrl = 'data:image/jpeg;base64,bmV3bWFnbmV0';
+    class MockFileReader {
+      onload: (() => void) | null = null;
+      result: string | ArrayBuffer | null = null;
+      readAsDataURL() {
+        this.result = replacementDataUrl;
+        if (this.onload) this.onload();
+      }
+    }
+    // @ts-expect-error Mocking FileReader
+    window.FileReader = MockFileReader;
+
+    fireEvent.change(screen.getByLabelText(/Change Magnet photo/i), {
+      target: { files: [new File(['new'], 'fresh.jpg', { type: 'image/jpeg' })] },
+    });
+    expect(screen.getByAltText('Magnet preview')).toHaveAttribute('src', replacementDataUrl);
+
+    // Remove keychain photo
+    fireEvent.click(screen.getByRole('button', { name: /Remove Keychain photo/i }));
+    expect(screen.queryByAltText('Keychain preview')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Weeble/i }));
+
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledTimes(1);
+    });
+
+    const [savedProducts, newImages] = handleSave.mock.calls[0];
+    expect(savedProducts[0].variantImages).toEqual({
+      magnet: '/images/products/weeble-bee-magnet-fresh.jpg',
+    });
+    expect(newImages).toEqual([
+      { filename: 'weeble-bee-magnet-fresh.jpg', base64Data: replacementDataUrl },
+    ]);
+
+    window.FileReader = originalFileReader;
+  });
+
+  it('omits variantImages for unchecked variants on save', async () => {
+    const handleSave = vi.fn().mockResolvedValue(undefined);
+    const productsWithVariantPhotos: Product[] = [
+      {
+        ...mockProducts[0],
+        variantImages: {
+          magnet: '/images/products/bee-magnet.jpg',
+          keychain: '/images/products/bee-keychain.jpg',
+        },
+      },
+    ];
+
+    render(<InventoryTab products={productsWithVariantPhotos} onSave={handleSave} />);
+    fireEvent.click(screen.getByRole('button', { name: /Edit/i }));
+
+    // Uncheck keychain
+    fireEvent.click(screen.getByRole('checkbox', { name: /Keychain/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Save Weeble/i }));
+
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledTimes(1);
+    });
+
+    const savedProduct: Product = handleSave.mock.calls[0][0][0];
+    expect(savedProduct.variantImages).toEqual({
+      magnet: '/images/products/bee-magnet.jpg',
+    });
   });
 
   it('handles multi-select category selection and stock toggles', async () => {

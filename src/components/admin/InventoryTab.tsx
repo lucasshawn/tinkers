@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, Search, Tag } from 'lucide-react';
-import { CategoryOption, Product } from '../../types';
+import { CategoryOption, Product, UploadedImage } from '../../types';
 import {
+  countProductVariantPhotos,
   DEFAULT_CATEGORIES,
   formatCategoryLabel,
   formatProductPriceSummary,
@@ -13,7 +14,7 @@ import { CategoryManagerModal } from './CategoryManagerModal';
 export interface InventoryTabProps {
   products: Product[];
   categories?: CategoryOption[];
-  onSave: (updated: Product[], newImage?: { filename: string; base64Data: string }) => Promise<void>;
+  onSave: (updated: Product[], newImages?: UploadedImage[]) => Promise<void>;
   onSaveCategories?: (
     updatedCategories: CategoryOption[],
     updatedProducts?: Product[]
@@ -66,7 +67,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
     }
   };
 
-  const handleSaveModal = async (saved: Product, newImage?: { filename: string; base64Data: string }) => {
+  const handleSaveModal = async (saved: Product, newImages?: UploadedImage[]) => {
     setIsSaving(true);
     try {
       let updated: Product[];
@@ -76,7 +77,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
       } else {
         updated = [saved, ...products];
       }
-      await onSave(updated, newImage);
+      await onSave(updated, newImages);
     } finally {
       setIsSaving(false);
     }
@@ -127,62 +128,74 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
               No Weebles found matching "{searchQuery}"
             </div>
           ) : (
-            filtered.map((item) => (
-              <div
-                key={item.id}
-                className="p-4 sm:p-5 flex items-center gap-4 hover:bg-weeble-pinkWash/30 transition-colors"
-              >
-                <img
-                  src={item.images[0] || '/images/products/placeholder.jpg'}
-                  alt={item.name}
-                  className="w-16 h-16 rounded-2xl object-cover border border-pink-200 bg-weeble-pinkBg shrink-0"
-                />
+            filtered.map((item) => {
+              const variantPhotoCount = countProductVariantPhotos(item);
+              return (
+                <div
+                  key={item.id}
+                  className="p-4 sm:p-5 flex items-center gap-4 hover:bg-weeble-pinkWash/30 transition-colors"
+                >
+                  <img
+                    src={item.images[0] || '/images/products/placeholder.jpg'}
+                    alt={item.name}
+                    className="w-16 h-16 rounded-2xl object-cover border border-pink-200 bg-weeble-pinkBg shrink-0"
+                  />
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-bubble text-base font-bold text-weeble-text truncate">
-                      {item.name}
-                    </h3>
-                    {item.isOneOfAKind && (
-                      <span className="bg-weeble-yellow text-weeble-text text-[10px] font-bold px-2 py-0.5 rounded-full">
-                        ⭐ 1-of-1
-                      </span>
-                    )}
-                    {!item.inStock && (
-                      <span className="bg-gray-200 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                        💤 Sold Out
-                      </span>
-                    )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-bubble text-base font-bold text-weeble-text truncate">
+                        {item.name}
+                      </h3>
+                      {item.isOneOfAKind && (
+                        <span className="bg-weeble-yellow text-weeble-text text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          ⭐ 1-of-1
+                        </span>
+                      )}
+                      {!item.inStock && (
+                        <span className="bg-gray-200 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          💤 Sold Out
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-weeble-textMuted">
+                      <span className="font-bold text-weeble-pink">{formatProductPriceSummary(item)}</span>
+                      <span>•</span>
+                      <span>{formatItemCategories(item)}</span>
+                      <span>•</span>
+                      <span>Stock: {item.stockCount}</span>
+                      {variantPhotoCount > 0 && (
+                        <>
+                          <span>•</span>
+                          <span className="text-weeble-text font-semibold">
+                            📷 +{variantPhotoCount}{' '}
+                            {variantPhotoCount === 1 ? 'photo' : 'photos'}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-weeble-textMuted">
-                    <span className="font-bold text-weeble-pink">{formatProductPriceSummary(item)}</span>
-                    <span>•</span>
-                    <span>{formatItemCategories(item)}</span>
-                    <span>•</span>
-                    <span>Stock: {item.stockCount}</span>
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleEdit(item)}
+                      className="p-2 rounded-xl bg-pink-50 hover:bg-pink-100 text-weeble-pink transition-colors"
+                      aria-label="Edit"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-500 transition-colors"
+                      aria-label="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => handleEdit(item)}
-                    className="p-2 rounded-xl bg-pink-50 hover:bg-pink-100 text-weeble-pink transition-colors"
-                    aria-label="Edit"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-500 transition-colors"
-                    aria-label="Delete"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

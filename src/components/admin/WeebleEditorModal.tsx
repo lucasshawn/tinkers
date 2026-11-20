@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
-import { CategoryOption, Product, VariantPrices, VariantType } from '../../types';
+import { Camera, Trash2, X } from 'lucide-react';
+import {
+  CategoryOption,
+  Product,
+  UploadedImage,
+  VariantImages,
+  VariantPrices,
+  VariantType,
+} from '../../types';
+import { readAndCompressImage, sanitizeImageFilename } from '../../utils/imageUtils';
 import { DEFAULT_CATEGORIES, formatCategoryLabel, getProductCategories } from '../../utils/productUtils';
 
 export interface WeebleEditorModalProps {
@@ -8,7 +16,7 @@ export interface WeebleEditorModalProps {
   categories?: CategoryOption[];
   isOpen: boolean;
   onClose: () => void;
-  onSave: (product: Product, newImage?: { filename: string; base64Data: string }) => void;
+  onSave: (product: Product, newImages?: UploadedImage[]) => void;
 }
 
 function resolveInitialCategories(product: Product | null, categories: CategoryOption[]): string[] {
@@ -44,7 +52,13 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
   const [stockCount, setStockCount] = useState(product ? String(product.stockCount) : '2');
   const [isOneOfAKind, setIsOneOfAKind] = useState(product?.isOneOfAKind || false);
   const [featured, setFeatured] = useState(product?.featured || false);
-  const [uploadedImage, setUploadedImage] = useState<{ filename: string; base64Data: string } | null>(null);
+  const [uploadedImage, setUploadedImage] = useState<UploadedImage | null>(null);
+  const [variantImageUrls, setVariantImageUrls] = useState<VariantImages>(
+    product?.variantImages ? { ...product.variantImages } : {}
+  );
+  const [uploadedVariantImages, setUploadedVariantImages] = useState<
+    Partial<Record<VariantType, UploadedImage>>
+  >({});
 
   // Sync state whenever product or isOpen changes
   useEffect(() => {
@@ -66,6 +80,8 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
       setIsOneOfAKind(product?.isOneOfAKind || false);
       setFeatured(product?.featured || false);
       setUploadedImage(null);
+      setVariantImageUrls(product?.variantImages ? { ...product.variantImages } : {});
+      setUploadedVariantImages({});
     }
   }, [product, isOpen]);
 
@@ -96,52 +112,39 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    const cleanFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, '');
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      // Immediately set raw data URL so preview and synchronous tests work right away
-      setUploadedImage({ filename: cleanFilename, base64Data: base64 });
-      setImageUrl(base64);
+    readAndCompressImage(file, {
+      onImmediate: (img) => {
+        setUploadedImage(img);
+        setImageUrl(img.base64Data);
+      },
+    });
+  };
 
-      // In browser environments with large photos (> 200KB), compress via canvas to avoid
-      // serverless 6MB request limits and localStorage 5MB quota limits.
-      if (base64.length > 200_000 && typeof Image !== 'undefined' && typeof document !== 'undefined') {
-        const img = new Image();
-        img.onload = () => {
-          try {
-            const maxDim = 800;
-            let { width, height } = img;
-            if (width > maxDim || height > maxDim) {
-              if (width > height) {
-                height = Math.round((height * maxDim) / width);
-                width = maxDim;
-              } else {
-                width = Math.round((width * maxDim) / height);
-                height = maxDim;
-              }
-            }
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(img, 0, 0, width, height);
-              const compressed = canvas.toDataURL('image/jpeg', 0.82);
-              if (compressed && compressed.startsWith('data:image/')) {
-                setUploadedImage({ filename: cleanFilename, base64Data: compressed });
-                setImageUrl(compressed);
-              }
-            }
-          } catch {
-            // Keep original base64 if canvas compression is unavailable
-          }
-        };
-        img.src = base64;
-      }
-    };
-    reader.readAsDataURL(file);
+  const handleVariantFileChange = (variant: VariantType, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    readAndCompressImage(file, {
+      onImmediate: (img) => {
+        setUploadedVariantImages((prev) => ({ ...prev, [variant]: img }));
+        setVariantImageUrls((prev) => ({ ...prev, [variant]: img.base64Data }));
+      },
+    });
+  };
+
+  const handleRemoveVariantPhoto = (variant: VariantType) => {
+    setVariantImageUrls((prev) => {
+      const next = { ...prev };
+      delete next[variant];
+      return next;
+    });
+    setUploadedVariantImages((prev) => {
+      const next = { ...prev };
+      delete next[variant];
+      return next;
+    });
   };
 
   const handleToggleCategory = (categoryId: string) => {
@@ -213,6 +216,29 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
       ? variantPrices[firstEnabledVariant]!
       : parseFloat(price) || 14.0;
 
+    const newImages: UploadedImage[] = [];
+    if (uploadedImage) {
+      newImages.push({
+        filename: uploadedImage.filename,
+        base64Data: uploadedImage.base64Data,
+      });
+    }
+
+    const finalVariantImages: VariantImages = {};
+    for (const v of variants) {
+      const uploadedVariant = uploadedVariantImages[v];
+      if (uploadedVariant) {
+        const variantFilename = sanitizeImageFilename(uploadedVariant.filename, `${id}-${v}`);
+        finalVariantImages[v] = `/images/products/${variantFilename}`;
+        newImages.push({
+          filename: variantFilename,
+          base64Data: uploadedVariant.base64Data,
+        });
+      } else if (variantImageUrls[v]?.trim()) {
+        finalVariantImages[v] = variantImageUrls[v]!.trim();
+      }
+    }
+
     const savedProduct: Product = {
       id,
       name,
@@ -220,6 +246,7 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
       price: resolvedBasePrice,
       variantPrices,
       images: [finalImagePath || '/images/products/placeholder.jpg'],
+      ...(Object.keys(finalVariantImages).length > 0 ? { variantImages: finalVariantImages } : {}),
       categories: selectedCategories,
       availableVariants: variants,
       inStock: finalInStock,
@@ -233,8 +260,66 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
         : { createdAt: new Date().toISOString() }),
     };
 
-    onSave(savedProduct, uploadedImage || undefined);
+    onSave(savedProduct, newImages.length > 0 ? newImages : undefined);
     onClose();
+  };
+
+  const renderVariantPhotoRow = (variant: VariantType, displayLabel: string) => {
+    const previewUrl = variantImageUrls[variant]?.trim();
+    const inputId = `weeble-${variant}-photo`;
+
+    return (
+      <div className="mt-2 pt-2 border-t border-pink-200/60 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {previewUrl ? (
+            <img
+              src={previewUrl}
+              alt={`${displayLabel} preview`}
+              className="w-12 h-12 rounded-xl object-cover border border-pink-200 bg-weeble-pinkBg shrink-0"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-xl border border-dashed border-pink-300 bg-white/70 flex items-center justify-center text-pink-300 shrink-0">
+              <Camera className="w-4 h-4" />
+            </div>
+          )}
+          <div className="text-[11px] text-weeble-textMuted truncate">
+            {previewUrl ? (
+              <span className="font-bold text-weeble-text">{displayLabel} photo set</span>
+            ) : (
+              <span>Using base photo</span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <label
+            htmlFor={inputId}
+            className="text-[11px] font-bold px-3 py-1 rounded-full bg-white hover:bg-pink-50 text-weeble-pink border border-pink-200 cursor-pointer transition-colors"
+          >
+            {previewUrl ? 'Change' : 'Upload Photo'}
+          </label>
+          <input
+            id={inputId}
+            type="file"
+            accept="image/*"
+            aria-label={previewUrl ? `Change ${displayLabel} photo` : `Upload ${displayLabel} photo`}
+            onChange={(e) => handleVariantFileChange(variant, e)}
+            className="sr-only"
+          />
+          {previewUrl && (
+            <button
+              type="button"
+              onClick={() => handleRemoveVariantPhoto(variant)}
+              aria-label={`Remove ${displayLabel} photo`}
+              className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-500 border border-rose-200 flex items-center gap-1 transition-colors"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Remove</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -251,7 +336,7 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="weeble-editor-modal-title"
-        className="relative bg-white rounded-3xl border-4 border-pink-200 max-w-xl w-full p-6 sm:p-8 shadow-2xl z-10"
+        className="relative bg-white rounded-3xl border-4 border-pink-200 max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl z-10"
       >
         <button
           type="button"
@@ -326,68 +411,74 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
               Available Styles & Pricing
             </label>
             <div className="space-y-2.5 bg-weeble-pinkWash/60 border border-pink-200 rounded-2xl p-3">
-              <div className="flex items-center justify-between gap-3">
-                <label className="flex items-center gap-2 text-xs font-bold text-weeble-text cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={variants.includes('magnet')}
-                    onChange={() => handleToggleVariant('magnet')}
-                    className="accent-pink-500 w-4 h-4"
-                  />
-                  <span>🧲 Refrigerator Magnet</span>
-                </label>
-                {variants.includes('magnet') && (
-                  <div className="flex items-center gap-2">
-                    <label
-                      htmlFor="weeble-magnet-price"
-                      className="text-xs font-bold text-weeble-textMuted whitespace-nowrap"
-                    >
-                      Magnet Price ($ USD)
-                    </label>
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 text-xs font-bold text-weeble-text cursor-pointer">
                     <input
-                      id="weeble-magnet-price"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      required
-                      value={magnetPrice}
-                      onChange={(e) => setMagnetPrice(e.target.value)}
-                      className="w-24 text-sm bg-white border border-pink-200 rounded-xl px-2.5 py-1.5 text-weeble-text font-bold focus:outline-none focus:border-weeble-pink"
+                      type="checkbox"
+                      checked={variants.includes('magnet')}
+                      onChange={() => handleToggleVariant('magnet')}
+                      className="accent-pink-500 w-4 h-4"
                     />
-                  </div>
-                )}
+                    <span>🧲 Refrigerator Magnet</span>
+                  </label>
+                  {variants.includes('magnet') && (
+                    <div className="flex items-center gap-2">
+                      <label
+                        htmlFor="weeble-magnet-price"
+                        className="text-xs font-bold text-weeble-textMuted whitespace-nowrap"
+                      >
+                        Magnet Price ($ USD)
+                      </label>
+                      <input
+                        id="weeble-magnet-price"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        required
+                        value={magnetPrice}
+                        onChange={(e) => setMagnetPrice(e.target.value)}
+                        className="w-24 text-sm bg-white border border-pink-200 rounded-xl px-2.5 py-1.5 text-weeble-text font-bold focus:outline-none focus:border-weeble-pink"
+                      />
+                    </div>
+                  )}
+                </div>
+                {variants.includes('magnet') && renderVariantPhotoRow('magnet', 'Magnet')}
               </div>
 
-              <div className="flex items-center justify-between gap-3">
-                <label className="flex items-center gap-2 text-xs font-bold text-weeble-text cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={variants.includes('keychain')}
-                    onChange={() => handleToggleVariant('keychain')}
-                    className="accent-pink-500 w-4 h-4"
-                  />
-                  <span>🔑 Keychain</span>
-                </label>
-                {variants.includes('keychain') && (
-                  <div className="flex items-center gap-2">
-                    <label
-                      htmlFor="weeble-keychain-price"
-                      className="text-xs font-bold text-weeble-textMuted whitespace-nowrap"
-                    >
-                      Keychain Price ($ USD)
-                    </label>
+              <div className="pt-2.5 border-t border-pink-200/70">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 text-xs font-bold text-weeble-text cursor-pointer">
                     <input
-                      id="weeble-keychain-price"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      required
-                      value={keychainPrice}
-                      onChange={(e) => setKeychainPrice(e.target.value)}
-                      className="w-24 text-sm bg-white border border-pink-200 rounded-xl px-2.5 py-1.5 text-weeble-text font-bold focus:outline-none focus:border-weeble-pink"
+                      type="checkbox"
+                      checked={variants.includes('keychain')}
+                      onChange={() => handleToggleVariant('keychain')}
+                      className="accent-pink-500 w-4 h-4"
                     />
-                  </div>
-                )}
+                    <span>🔑 Keychain</span>
+                  </label>
+                  {variants.includes('keychain') && (
+                    <div className="flex items-center gap-2">
+                      <label
+                        htmlFor="weeble-keychain-price"
+                        className="text-xs font-bold text-weeble-textMuted whitespace-nowrap"
+                      >
+                        Keychain Price ($ USD)
+                      </label>
+                      <input
+                        id="weeble-keychain-price"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        required
+                        value={keychainPrice}
+                        onChange={(e) => setKeychainPrice(e.target.value)}
+                        className="w-24 text-sm bg-white border border-pink-200 rounded-xl px-2.5 py-1.5 text-weeble-text font-bold focus:outline-none focus:border-weeble-pink"
+                      />
+                    </div>
+                  )}
+                </div>
+                {variants.includes('keychain') && renderVariantPhotoRow('keychain', 'Keychain')}
               </div>
 
               {variants.length === 0 && (
@@ -427,7 +518,7 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
           {/* Image Upload & Preview */}
           <div>
             <label htmlFor="weeble-photo" className="block text-xs font-bold text-weeble-text mb-1">
-              Product Photo
+              Base Product Photo
             </label>
             <div className="flex items-center gap-3">
               {imageUrl && (
