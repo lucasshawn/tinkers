@@ -9,7 +9,7 @@
       "magnet": 14.00
     },
     "images": ["/images/products/bumblebee-keychain.jpg"],
-    "category": "animals",
+    "categories": ["animals"],
     "availableVariants": ["keychain", "magnet"],
     "inStock": true,
     "stockCount": 2,
@@ -26,7 +26,7 @@
       "magnet": 15.00
     },
     "images": ["/images/products/blueberry-pancakes.jpg"],
-    "category": "sweets",
+    "categories": ["sweets"],
     "availableVariants": ["keychain", "magnet"],
     "inStock": true,
     "stockCount": 1,
@@ -43,7 +43,7 @@
       "magnet": 16.50
     },
     "images": ["/images/products/croissant-chocolate.jpg"],
-    "category": "sweets",
+    "categories": ["sweets"],
     "availableVariants": ["keychain", "magnet"],
     "inStock": true,
     "stockCount": 1,
@@ -60,7 +60,7 @@
       "magnet": 14.50
     },
     "images": ["/images/products/strawberry-macaron.jpg"],
-    "category": "sweets",
+    "categories": ["sweets"],
     "availableVariants": ["keychain", "magnet"],
     "inStock": true,
     "stockCount": 3,
@@ -77,7 +77,7 @@
       "keychain": 13.50
     },
     "images": ["/images/products/ghost-weeble.jpg"],
-    "category": "fantasy",
+    "categories": ["fantasy"],
     "availableVariants": ["magnet", "keychain"],
     "inStock": true,
     "stockCount": 2,
@@ -94,7 +94,7 @@
       "keychain": 15.00
     },
     "images": ["/images/products/pumpkin-spice-mug.jpg"],
-    "category": "sweets",
+    "categories": ["sweets"],
     "availableVariants": ["magnet", "keychain"],
     "inStock": true,
     "stockCount": 1,
@@ -111,7 +111,7 @@
       "keychain": 14.00
     },
     "images": ["https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=600&auto=format&fit=crop&q=80"],
-    "category": "animals",
+    "categories": ["animals"],
     "availableVariants": ["magnet", "keychain"],
     "inStock": true,
     "stockCount": 4,
@@ -128,7 +128,7 @@
       "keychain": 15.00
     },
     "images": ["https://images.unsplash.com/photo-1535268647677-300dbf3d78d1?w=600&auto=format&fit=crop&q=80"],
-    "category": "animals",
+    "categories": ["animals"],
     "availableVariants": ["magnet", "keychain"],
     "inStock": true,
     "stockCount": 2,
@@ -145,7 +145,7 @@
       "keychain": 13.50
     },
     "images": ["/images/products/ghost-weeble.jpg"],
-    "category": "fantasy",
+    "categories": ["fantasy"],
     "availableVariants": ["magnet", "keychain"],
     "inStock": false,
     "stockCount": 0,

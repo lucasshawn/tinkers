@@ -588,6 +588,278 @@ describe('admin-save Netlify Function', () => {
       expect.stringContaining('Old Expired Change')
     );
   });
+
+  it('saves categories and cascades removal onto products when type is categories', async () => {
+    const updatedCategories = [{ id: 'animals', label: 'Critters', emoji: '🐰' }];
+    const productsWithRemovedCat: Product[] = [
+      {
+        id: 'p1',
+        name: 'Sweet Bunny',
+        description: 'Bunny holding donut',
+        price: 14,
+        images: ['/images/products/bunny.jpg'],
+        categories: ['animals', 'sweets'],
+        availableVariants: ['magnet'],
+        inStock: true,
+        stockCount: 2,
+      },
+      {
+        id: 'p2',
+        name: 'Donut Charm',
+        description: 'Glazed donut',
+        price: 13,
+        images: ['/images/products/donut.jpg'],
+        categories: ['sweets'],
+        availableVariants: ['keychain'],
+        inStock: true,
+        stockCount: 1,
+      },
+    ];
+
+    const event = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'categories',
+        categories: updatedCategories,
+        products: productsWithRemovedCat,
+      }),
+    };
+
+    const res = (await handler(event as any, {} as any)) as any;
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.success).toBe(true);
+
+    const writeCalls = (fs.writeFileSync as any).mock.calls;
+    const settingsCall = writeCalls.find((c: any[]) => String(c[0]).includes('settings.json'));
+    const productsCall = writeCalls.find((c: any[]) => String(c[0]).includes('products.json'));
+
+    expect(settingsCall).toBeDefined();
+    expect(JSON.parse(settingsCall[1]).categories).toEqual(updatedCategories);
+
+    expect(productsCall).toBeDefined();
+    const writtenProducts = JSON.parse(productsCall[1]);
+    expect(writtenProducts[0].categories).toEqual(['animals']);
+    expect(writtenProducts[1].categories).toEqual([]);
+  });
+
+  it('preserves existing categories when saving settings without a categories property', async () => {
+    const existingSettings = {
+      contactEmail: 'old@weebles.com',
+      customOrderEmail: 'old@weebles.com',
+      socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+      admins: ['lucasshawn@gmail.com'],
+      categories: [{ id: 'seasonal', label: 'Seasonal', emoji: '🎄' }],
+    };
+    vi.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify(existingSettings));
+
+    const event = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'settings',
+        settings: {
+          contactEmail: 'new@weebles.com',
+          customOrderEmail: 'new@weebles.com',
+          socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+        },
+      }),
+    };
+
+    const res = (await handler(event as any, {} as any)) as any;
+    expect(res.statusCode).toBe(200);
+
+    const writeCalls = (fs.writeFileSync as any).mock.calls;
+    const settingsCall = writeCalls.find((c: any[]) => String(c[0]).includes('settings.json'));
+    expect(JSON.parse(settingsCall[1]).categories).toEqual([
+      { id: 'seasonal', label: 'Seasonal', emoji: '🎄' },
+    ]);
+  });
+
+  it('writes settings.json without rewriting products.json when products is omitted and persisted products are clean', async () => {
+    const persistedSettings = {
+      contactEmail: 'hello@weebles.com',
+      customOrderEmail: 'orders@weebles.com',
+      socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+      admins: ['lucasshawn@gmail.com'],
+      categories: [{ id: 'animals', label: 'Critters', emoji: '🐰' }],
+    };
+    const cleanProducts: Product[] = [
+      {
+        id: 'p-clean',
+        name: 'Clean Bunny',
+        description: 'Already normalized',
+        price: 14,
+        images: ['/images/products/bunny.jpg'],
+        categories: ['animals'],
+        availableVariants: ['magnet'],
+        inStock: true,
+        stockCount: 2,
+      },
+    ];
+    vi.spyOn(fs, 'readFileSync').mockImplementation(((filePath: fs.PathOrFileDescriptor) => {
+      const p = String(filePath);
+      if (p.endsWith('settings.json')) return JSON.stringify(persistedSettings);
+      if (p.endsWith('products.json')) return JSON.stringify(cleanProducts);
+      return '[]';
+    }) as any);
+
+    const updatedCategories = [
+      { id: 'animals', label: 'Critters', emoji: '🐰' },
+      { id: 'sweets', label: 'Sweets', emoji: '🍩' },
+    ];
+    const event = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'categories',
+        categories: updatedCategories,
+      }),
+    };
+
+    const res = (await handler(event as any, {} as any)) as any;
+    expect(res.statusCode).toBe(200);
+
+    const writeCalls = (fs.writeFileSync as any).mock.calls;
+    const settingsCall = writeCalls.find((c: any[]) => String(c[0]).endsWith('settings.json'));
+    const productsWrites = writeCalls.filter((c: any[]) => String(c[0]).endsWith('products.json'));
+
+    expect(settingsCall).toBeDefined();
+    expect(JSON.parse(settingsCall[1]).categories).toEqual(updatedCategories);
+    expect(productsWrites).toHaveLength(0);
+  });
+
+  it('rewrites products.json when products is omitted and persisted products contain legacy category or deleted category IDs', async () => {
+    const persistedSettings = {
+      contactEmail: 'hello@weebles.com',
+      customOrderEmail: 'orders@weebles.com',
+      socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+      admins: ['lucasshawn@gmail.com'],
+      categories: [
+        { id: 'animals', label: 'Critters', emoji: '🐰' },
+        { id: 'sweets', label: 'Sweets', emoji: '🍩' },
+      ],
+    };
+    const dirtyProducts = [
+      {
+        id: 'p-legacy',
+        name: 'Legacy Bee',
+        description: 'Has legacy category field',
+        price: 14,
+        images: ['/images/products/bee.jpg'],
+        category: 'animals',
+        availableVariants: ['magnet'],
+        inStock: true,
+        stockCount: 2,
+      },
+      {
+        id: 'p-stale',
+        name: 'Stale Donut',
+        description: 'References deleted category',
+        price: 15,
+        images: ['/images/products/donut.jpg'],
+        categories: ['animals', 'sweets'],
+        availableVariants: ['keychain'],
+        inStock: true,
+        stockCount: 1,
+      },
+    ];
+    vi.spyOn(fs, 'readFileSync').mockImplementation(((filePath: fs.PathOrFileDescriptor) => {
+      const p = String(filePath);
+      if (p.endsWith('settings.json')) return JSON.stringify(persistedSettings);
+      if (p.endsWith('products.json')) return JSON.stringify(dirtyProducts);
+      return '[]';
+    }) as any);
+
+    const updatedCategories = [{ id: 'animals', label: 'Critters', emoji: '🐰' }];
+    const event = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'categories',
+        categories: updatedCategories,
+      }),
+    };
+
+    const res = (await handler(event as any, {} as any)) as any;
+    expect(res.statusCode).toBe(200);
+
+    const writeCalls = (fs.writeFileSync as any).mock.calls;
+    const productsCall = writeCalls.find((c: any[]) => String(c[0]).endsWith('products.json'));
+    expect(productsCall).toBeDefined();
+
+    const writtenProducts = JSON.parse(productsCall[1]);
+    expect(writtenProducts[0].categories).toEqual(['animals']);
+    expect(writtenProducts[0]).not.toHaveProperty('category');
+    expect(writtenProducts[1].categories).toEqual(['animals']);
+  });
+
+  it('saves empty categories array and clears categories from all products when categories is []', async () => {
+    const persistedSettings = {
+      contactEmail: 'hello@weebles.com',
+      customOrderEmail: 'orders@weebles.com',
+      socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+      admins: ['lucasshawn@gmail.com'],
+      categories: [{ id: 'animals', label: 'Critters', emoji: '🐰' }],
+    };
+    const persistedProducts = [
+      {
+        id: 'p1',
+        name: 'Critter Buddy',
+        description: 'Has animals category',
+        price: 14,
+        images: ['/images/products/bee.jpg'],
+        categories: ['animals'],
+        availableVariants: ['magnet'],
+        inStock: true,
+        stockCount: 2,
+      },
+      {
+        id: 'p2',
+        name: 'Legacy Sweet',
+        description: 'Has legacy category',
+        price: 15,
+        images: ['/images/products/donut.jpg'],
+        category: 'sweets',
+        availableVariants: ['keychain'],
+        inStock: true,
+        stockCount: 1,
+      },
+    ];
+    vi.spyOn(fs, 'readFileSync').mockImplementation(((filePath: fs.PathOrFileDescriptor) => {
+      const p = String(filePath);
+      if (p.endsWith('settings.json')) return JSON.stringify(persistedSettings);
+      if (p.endsWith('products.json')) return JSON.stringify(persistedProducts);
+      return '[]';
+    }) as any);
+
+    const event = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'categories',
+        categories: [],
+      }),
+    };
+
+    const res = (await handler(event as any, {} as any)) as any;
+    expect(res.statusCode).toBe(200);
+
+    const writeCalls = (fs.writeFileSync as any).mock.calls;
+    const settingsCall = writeCalls.find((c: any[]) => String(c[0]).endsWith('settings.json'));
+    const productsCall = writeCalls.find((c: any[]) => String(c[0]).endsWith('products.json'));
+
+    expect(settingsCall).toBeDefined();
+    expect(JSON.parse(settingsCall[1]).categories).toEqual([]);
+
+    expect(productsCall).toBeDefined();
+    const writtenProducts = JSON.parse(productsCall[1]);
+    expect(writtenProducts).toHaveLength(2);
+    expect(writtenProducts[0].categories).toEqual([]);
+    expect(writtenProducts[1].categories).toEqual([]);
+    expect(writtenProducts[1]).not.toHaveProperty('category');
+  });
 });
 
 describe('adminApi client service', () => {
@@ -811,5 +1083,68 @@ describe('adminApi client service', () => {
         }),
       })
     );
+  });
+
+  it('saveCategories throws error when not authenticated', async () => {
+    await expect(
+      adminApi.saveCategories([{ id: 'animals', label: 'Critters', emoji: '🐰' }])
+    ).rejects.toThrow(/not authenticated/i);
+  });
+
+  it('saveCategories posts categories and optional products with session Bearer token', async () => {
+    adminAuth.setSession({
+      token: 'cat-token',
+      email: 'lucasshawn@gmail.com',
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, message: 'Categories saved!' }),
+    });
+    globalThis.fetch = mockFetch;
+
+    const cats = [{ id: 'animals', label: 'Critters', emoji: '🐰' }];
+    const result = await adminApi.saveCategories(cats, mockProducts);
+    expect(result.success).toBe(true);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/.netlify/functions/admin-save',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer cat-token',
+        },
+        body: JSON.stringify({
+          type: 'categories',
+          categories: cats,
+          products: mockProducts,
+        }),
+      })
+    );
+  });
+
+  it('saveCategories throws enriched error with status and endpoint when API returns failure status', async () => {
+    adminAuth.setSession({
+      token: 'cat-token',
+      email: 'lucasshawn@gmail.com',
+    });
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'Category sync failed' }),
+    });
+
+    let caughtError: any;
+    try {
+      await adminApi.saveCategories([{ id: 'animals', label: 'Critters', emoji: '🐰' }]);
+    } catch (err) {
+      caughtError = err;
+    }
+
+    expect(caughtError).toBeInstanceOf(Error);
+    expect(caughtError.message).toBe('Category sync failed');
+    expect(caughtError.status).toBe(500);
+    expect(caughtError.endpoint).toBe('POST /.netlify/functions/admin-save (type=categories)');
   });
 });

@@ -13,5 +13,11 @@
   "admins": [
     "lucasshawn@gmail.com",
     "lucascierra24@gmail.com"
+  ],
+  "categories": [
+    { "id": "animals", "label": "Critters", "emoji": "🐰" },
+    { "id": "sweets", "label": "Sweets", "emoji": "🍩" },
+    { "id": "fantasy", "label": "Fantasy", "emoji": "✨" },
+    { "id": "mini-friends", "label": "Mini-Friends", "emoji": "🌸" }
   ]
 }

@@ -6,6 +6,12 @@ import {
   NEW_PRODUCT_WINDOW_MS,
   getProductVariantPrice,
   formatProductPriceSummary,
+  DEFAULT_CATEGORIES,
+  slugifyCategoryId,
+  getProductCategories,
+  removeCategoryFromProducts,
+  pruneRemovedCategories,
+  formatCategoryLabel,
 } from '../src/utils/productUtils';
 import { Product } from '../src/types';
 
@@ -194,6 +200,98 @@ describe('productUtils', () => {
       };
       const results = filterProducts([mixedPriceProduct], 'under-15', '');
       expect(results).toHaveLength(1);
+    });
+  });
+
+  describe('category helpers and multi-category filtering', () => {
+    it('exports the 4 default categories matching seeded taxonomy', () => {
+      expect(DEFAULT_CATEGORIES.map((c) => c.id)).toEqual([
+        'animals',
+        'sweets',
+        'fantasy',
+        'mini-friends',
+      ]);
+    });
+
+    it('getProductCategories supports categories array, legacy category string, deduplication, and empty', () => {
+      expect(
+        getProductCategories({ ...mockProducts[0], categories: ['animals', 'sweets', 'animals'] })
+      ).toEqual(['animals', 'sweets']);
+      expect(getProductCategories({ ...mockProducts[0], categories: undefined, category: 'fantasy' })).toEqual([
+        'fantasy',
+      ]);
+      expect(getProductCategories({ ...mockProducts[0], categories: [], category: 'animals' })).toEqual([]);
+      expect(getProductCategories({ ...mockProducts[0], categories: undefined, category: undefined })).toEqual([]);
+    });
+
+    it('slugifyCategoryId normalizes labels and avoids collisions with reserved built-in filter IDs', () => {
+      expect(slugifyCategoryId('  Holiday Specials!  ')).toBe('holiday-specials');
+      expect(slugifyCategoryId('Mini---Friends')).toBe('mini-friends');
+      expect(slugifyCategoryId('!!!')).toBe('');
+      expect(slugifyCategoryId('All')).toBe('all-category');
+      expect(slugifyCategoryId('Magnets')).toBe('magnets-category');
+      expect(slugifyCategoryId('Keychains')).toBe('keychains-category');
+      expect(slugifyCategoryId('Under 15')).toBe('under-15-category');
+      expect(slugifyCategoryId('Featured')).toBe('featured-category');
+    });
+
+    it('formatCategoryLabel includes emoji when provided and omits when empty', () => {
+      expect(formatCategoryLabel({ id: 'animals', label: 'Critters', emoji: '🐰' })).toBe('🐰 Critters');
+      expect(formatCategoryLabel({ id: 'custom', label: 'Holiday' })).toBe('Holiday');
+      expect(formatCategoryLabel({ id: 'custom', label: 'Holiday', emoji: '   ' })).toBe('Holiday');
+    });
+
+    it('removeCategoryFromProducts strips deleted category from single, multi, and legacy items', () => {
+      const multiItem: Product = {
+        ...mockProducts[0],
+        id: 'multi-1',
+        categories: ['animals', 'sweets'],
+        category: undefined,
+      };
+      const singleItem: Product = {
+        ...mockProducts[1],
+        id: 'single-1',
+        categories: ['sweets'],
+        category: undefined,
+      };
+      const legacyItem: Product = {
+        ...mockProducts[2],
+        id: 'legacy-1',
+        categories: undefined,
+        category: 'sweets',
+      };
+
+      const cleaned = removeCategoryFromProducts([multiItem, singleItem, legacyItem], 'sweets');
+      expect(cleaned[0].categories).toEqual(['animals']);
+      expect(cleaned[0].category).toBeUndefined();
+      expect(cleaned[1].categories).toEqual([]);
+      expect(cleaned[2].categories).toEqual([]);
+      expect(cleaned[2].category).toBeUndefined();
+    });
+
+    it('pruneRemovedCategories retains only IDs present in validCategoryIds', () => {
+      const items: Product[] = [
+        { ...mockProducts[0], categories: ['animals', 'deleted-cat'], category: undefined },
+        { ...mockProducts[1], categories: undefined, category: 'deleted-cat' },
+      ];
+      const pruned = pruneRemovedCategories(items, new Set(['animals']));
+      expect(pruned[0].categories).toEqual(['animals']);
+      expect(pruned[1].categories).toEqual([]);
+    });
+
+    it('filterProducts matches multi-category items under each assigned category', () => {
+      const hybrid: Product = {
+        ...mockProducts[0],
+        id: 'hybrid-1',
+        name: 'Candy Bunny',
+        categories: ['animals', 'sweets'],
+        category: undefined,
+      };
+      const catalog = [hybrid, mockProducts[1]];
+
+      expect(filterProducts(catalog, 'animals', '').map((p) => p.id)).toEqual(['hybrid-1', 'weeble-2']);
+      expect(filterProducts(catalog, 'sweets', '').map((p) => p.id)).toEqual(['hybrid-1']);
+      expect(filterProducts(catalog, 'fantasy', '')).toEqual([]);
     });
   });
 });

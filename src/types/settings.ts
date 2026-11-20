@@ -3,6 +3,12 @@ export interface AnnouncementBannerSettings {
   text: string;
 }
 
+export interface CategoryOption {
+  id: string;
+  label: string;
+  emoji?: string;
+}
+
 export interface SiteSettings {
   contactEmail: string;
   customOrderEmail: string;
@@ -13,4 +19,5 @@ export interface SiteSettings {
   };
   announcementBanner?: AnnouncementBannerSettings;
   admins?: string[];
+  categories?: CategoryOption[];
 }

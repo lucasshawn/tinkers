@@ -323,4 +323,162 @@ describe('AdminPortal', () => {
     expect(screen.getByText('Error: Add Admin')).toBeInTheDocument();
     expect(screen.getByText(/ERROR: Please enter a valid email address/i)).toBeInTheDocument();
   });
+
+  it('adds and removes categories in Manage Catalog and removes deleted category from catalog items', async () => {
+    adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
+    vi.spyOn(adminApi, 'saveCategories').mockResolvedValue({
+      success: true,
+      message: 'Categories saved locally (Dev Mode).',
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(
+      <SettingsProvider>
+        <AdminPortal />
+      </SettingsProvider>
+    );
+
+    // Open Manage Categories modal
+    fireEvent.click(screen.getByRole('button', { name: /Manage Categories/i }));
+
+    // Add a new category
+    fireEvent.change(screen.getByLabelText(/Emoji/i), { target: { value: '🎀' } });
+    fireEvent.change(screen.getByLabelText(/Category Name/i), { target: { value: 'Limited Drops' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add Category/i }));
+
+    await waitFor(() => {
+      expect(adminApi.saveCategories).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByText('🎀 Limited Drops')).toBeInTheDocument();
+
+    // Remove 'Critters' (animals) -> should cascade cleanup to Bumblebee & other animals
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Critters' }));
+
+    await waitFor(() => {
+      expect(adminApi.saveCategories).toHaveBeenCalledTimes(2);
+    });
+
+    const [savedCategories, savedProducts] = (adminApi.saveCategories as any).mock.calls[1];
+    expect(savedCategories.some((c: any) => c.id === 'animals')).toBe(false);
+    expect(
+      savedProducts.every((p: any) => !(p.categories || []).includes('animals'))
+    ).toBe(true);
+  });
+
+  it('preserves categories and allows clean retry when saveCategories fails on add', async () => {
+    adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
+    const saveCategoriesSpy = vi
+      .spyOn(adminApi, 'saveCategories')
+      .mockRejectedValueOnce(new Error('Category save failed (500)'))
+      .mockResolvedValueOnce({
+        success: true,
+        message: 'Categories saved locally (Dev Mode).',
+      });
+    vi.spyOn(adminApi, 'saveChanges').mockResolvedValue({
+      success: true,
+      message: 'Change log saved.',
+    });
+
+    render(
+      <SettingsProvider>
+        <AdminPortal />
+      </SettingsProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Manage Categories/i }));
+    fireEvent.change(screen.getByLabelText(/Category Name/i), { target: { value: 'Holiday' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add Category/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Category save failed \(500\)/i).length).toBeGreaterThanOrEqual(1);
+    });
+
+    // State & localStorage must NOT have been mutated on failure, so input remains and retry works
+    expect(screen.queryByText('Holiday')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Category Name/i)).toHaveValue('Holiday');
+    expect(localStorage.getItem('weebles_settings_v1')).toBeNull();
+
+    // Retry clicking Add Category — should not falsely trigger "already exists"
+    fireEvent.click(screen.getByRole('button', { name: /Add Category/i }));
+
+    await waitFor(() => {
+      expect(saveCategoriesSpy).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('Holiday')).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/already exists/i)).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('weebles_settings_v1') || '{}').categories).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'holiday', label: 'Holiday' })])
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Close modal/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Changes/i }));
+    expect(screen.getByText('Error: Save Categories')).toBeInTheDocument();
+    expect(screen.getByText(/ERROR: Category save failed \(500\)/i)).toBeInTheDocument();
+  });
+
+  it('preserves categories and products without mutating localStorage when saveCategories fails on delete', async () => {
+    adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
+    const initialSettings = {
+      contactEmail: 'weeblesclay@gmail.com',
+      customOrderEmail: 'weeblesclay@gmail.com',
+      socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+      announcementBanner: { enabled: false, text: '' },
+      admins: ['lucasshawn@gmail.com'],
+      categories: [
+        { id: 'animals', label: 'Critters', emoji: '🐰' },
+        { id: 'sweets', label: 'Sweets', emoji: '🍩' },
+      ],
+    };
+    const initialProducts = [
+      {
+        id: 'weeble-bumblebee',
+        name: 'Chubby Bumblebee',
+        description: 'Sweet honey bee',
+        price: 14,
+        images: ['/images/products/bumblebee.jpg'],
+        categories: ['animals'],
+        availableVariants: ['magnet'],
+        inStock: true,
+        stockCount: 2,
+      },
+    ];
+    localStorage.setItem('weebles_settings_v1', JSON.stringify(initialSettings));
+    localStorage.setItem('weebles_products_v1', JSON.stringify(initialProducts));
+
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.spyOn(adminApi, 'saveCategories').mockRejectedValue(new Error('Category delete failed (500)'));
+    vi.spyOn(adminApi, 'saveChanges').mockResolvedValue({
+      success: true,
+      message: 'Change log saved.',
+    });
+
+    render(
+      <SettingsProvider>
+        <AdminPortal />
+      </SettingsProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Manage Categories/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Critters' }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Category delete failed \(500\)/i).length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Category and product associations must remain intact in state and localStorage
+    expect(screen.getByRole('button', { name: 'Remove Critters' })).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('weebles_settings_v1') || '{}').categories).toEqual(
+      initialSettings.categories
+    );
+    expect(JSON.parse(localStorage.getItem('weebles_products_v1') || '[]')).toEqual(
+      initialProducts
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Close modal/i }));
+    expect(screen.getByText('🐰 Critters')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Changes/i }));
+    expect(screen.getByText('Error: Save Categories')).toBeInTheDocument();
+    expect(screen.getByText(/ERROR: Category delete failed \(500\)/i)).toBeInTheDocument();
+  });
 });

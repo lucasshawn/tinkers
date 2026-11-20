@@ -1,5 +1,5 @@
 import { Product, ChangeLogEntry } from '../types';
-import { SiteSettings } from '../types/settings';
+import { CategoryOption, SiteSettings } from '../types/settings';
 import { adminAuth } from './adminAuth';
 
 export const adminApi = {
@@ -124,6 +124,37 @@ export const adminApi = {
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.error || 'Failed to save change log');
+    }
+
+    return res.json();
+  },
+
+  async saveCategories(
+    categories: CategoryOption[],
+    products?: Product[]
+  ): Promise<{ success: boolean; message: string }> {
+    const session = adminAuth.getSession();
+    if (!session) throw new Error('Not authenticated');
+
+    const res = await fetch('/.netlify/functions/admin-save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({
+        type: 'categories',
+        categories,
+        ...(products ? { products } : {}),
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const err = new Error(data.error || 'Failed to save categories') as any;
+      err.status = res.status;
+      err.endpoint = 'POST /.netlify/functions/admin-save (type=categories)';
+      throw err;
     }
 
     return res.json();

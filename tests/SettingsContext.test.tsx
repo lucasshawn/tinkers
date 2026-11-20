@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import React from 'react';
-import { SettingsProvider, useSettings } from '../src/context/SettingsContext';
+import { SettingsProvider, useSettings, SETTINGS_STORAGE_KEY } from '../src/context/SettingsContext';
 
 describe('SettingsContext', () => {
   beforeEach(() => {
@@ -83,5 +83,48 @@ describe('SettingsContext', () => {
     const { result } = renderHook(() => useSettings(), { wrapper });
     expect(result.current.settings.contactEmail).toBe('stored@weebles.com');
     expect(result.current.settings.socials.tiktok).toBe('https://tiktok.com/@stored');
+  });
+
+  it('provides seeded default categories and preserves an explicit empty categories array from localStorage', () => {
+    expect(SETTINGS_STORAGE_KEY).toBe('weebles_settings_v1');
+    const { result: defaultResult } = renderHook(() => useSettings(), { wrapper });
+    expect(defaultResult.current.settings.categories?.map((c) => c.id)).toEqual([
+      'animals',
+      'sweets',
+      'fantasy',
+      'mini-friends',
+    ]);
+
+    localStorage.setItem(
+      'weebles_settings_v1',
+      JSON.stringify({
+        contactEmail: 'stored@weebles.com',
+        customOrderEmail: 'stored@weebles.com',
+        socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+        categories: [],
+      })
+    );
+
+    const { result: emptyResult } = renderHook(() => useSettings(), { wrapper });
+    expect(emptyResult.current.settings.categories).toEqual([]);
+  });
+
+  it('falls back to default categories when localStorage settings omit categories', () => {
+    localStorage.setItem(
+      'weebles_settings_v1',
+      JSON.stringify({
+        contactEmail: 'legacy@weebles.com',
+        customOrderEmail: 'legacy@weebles.com',
+        socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+      })
+    );
+
+    const { result } = renderHook(() => useSettings(), { wrapper });
+    expect(result.current.settings.categories?.map((c) => c.id)).toEqual([
+      'animals',
+      'sweets',
+      'fantasy',
+      'mini-friends',
+    ]);
   });
 });

@@ -1,19 +1,43 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Search } from 'lucide-react';
-import { Product } from '../../types';
-import { formatProductPriceSummary } from '../../utils/productUtils';
+import { Plus, Edit2, Trash2, Search, Tag } from 'lucide-react';
+import { CategoryOption, Product } from '../../types';
+import {
+  DEFAULT_CATEGORIES,
+  formatCategoryLabel,
+  formatProductPriceSummary,
+  getProductCategories,
+} from '../../utils/productUtils';
 import { WeebleEditorModal } from './WeebleEditorModal';
+import { CategoryManagerModal } from './CategoryManagerModal';
 
 export interface InventoryTabProps {
   products: Product[];
+  categories?: CategoryOption[];
   onSave: (updated: Product[], newImage?: { filename: string; base64Data: string }) => Promise<void>;
+  onSaveCategories?: (
+    updatedCategories: CategoryOption[],
+    updatedProducts?: Product[]
+  ) => Promise<void>;
 }
 
-export const InventoryTab: React.FC<InventoryTabProps> = ({ products, onSave }) => {
+export const InventoryTab: React.FC<InventoryTabProps> = ({
+  products,
+  categories = DEFAULT_CATEGORIES,
+  onSave,
+  onSaveCategories,
+}) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const categoryMap = new Map(categories.map((c) => [c.id, formatCategoryLabel(c)]));
+  const formatItemCategories = (item: Product): string => {
+    const ids = getProductCategories(item);
+    if (ids.length === 0) return 'Uncategorized';
+    return ids.map((id) => categoryMap.get(id) ?? id).join(', ');
+  };
 
   const filtered = products.filter(
     (p) =>
@@ -73,14 +97,26 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ products, onSave }) 
           />
         </div>
 
-        <button
-          onClick={handleAddNew}
-          disabled={isSaving}
-          className="w-full sm:w-auto bg-weeble-pink hover:bg-pink-500 text-white font-bubble text-sm font-bold px-5 py-2.5 rounded-full shadow-pillow flex items-center justify-center gap-1.5 transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
-        >
-          <Plus className="w-4 h-4" />
-          <span>+ Add New Weeble</span>
-        </button>
+        <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setIsCategoryModalOpen(true)}
+            disabled={isSaving}
+            className="w-full sm:w-auto bg-white hover:bg-weeble-pinkWash text-weeble-text border-2 border-pink-200 font-bubble text-sm font-bold px-4 py-2 rounded-full flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+          >
+            <Tag className="w-4 h-4 text-weeble-pink" />
+            <span>Manage Categories</span>
+          </button>
+
+          <button
+            onClick={handleAddNew}
+            disabled={isSaving}
+            className="w-full sm:w-auto bg-weeble-pink hover:bg-pink-500 text-white font-bubble text-sm font-bold px-5 py-2.5 rounded-full shadow-pillow flex items-center justify-center gap-1.5 transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Add New Weeble</span>
+          </button>
+        </div>
       </div>
 
       {/* Inventory Table / Grid */}
@@ -119,10 +155,10 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ products, onSave }) 
                     )}
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs text-weeble-textMuted">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-weeble-textMuted">
                     <span className="font-bold text-weeble-pink">{formatProductPriceSummary(item)}</span>
                     <span>•</span>
-                    <span className="capitalize">{item.category}</span>
+                    <span>{formatItemCategories(item)}</span>
                     <span>•</span>
                     <span>Stock: {item.stockCount}</span>
                   </div>
@@ -153,9 +189,22 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ products, onSave }) 
 
       <WeebleEditorModal
         product={editingProduct}
+        categories={categories}
         isOpen={isEditorOpen}
         onClose={() => setIsEditorOpen(false)}
         onSave={handleSaveModal}
+      />
+
+      <CategoryManagerModal
+        isOpen={isCategoryModalOpen}
+        categories={categories}
+        products={products}
+        onClose={() => setIsCategoryModalOpen(false)}
+        onSaveCategories={async (updatedCategories, updatedProducts) => {
+          if (onSaveCategories) {
+            await onSaveCategories(updatedCategories, updatedProducts);
+          }
+        }}
       />
     </div>
   );

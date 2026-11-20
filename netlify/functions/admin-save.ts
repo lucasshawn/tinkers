@@ -7,6 +7,7 @@ import { getAllowedAdmins } from './admin-auth';
 import defaultProductsData from '../../src/data/products.json';
 import defaultSettingsData from '../../src/data/settings.json';
 import defaultChangesData from '../../src/data/changes.json';
+import { pruneRemovedCategories } from '../../src/utils/productUtils';
 
 const TMP_PRODUCTS_FILE = 'weebles-products.json';
 const TMP_SETTINGS_FILE = 'weebles-settings.json';
@@ -309,7 +310,7 @@ export const handler: Handler = async (event) => {
       event.isBase64Encoded && event.body
         ? Buffer.from(event.body, 'base64').toString('utf-8')
         : event.body || '{}';
-    const { type, products, settings, admins, newImage, changes } = JSON.parse(rawBody);
+    const { type, products, settings, admins, categories, newImage, changes } = JSON.parse(rawBody);
     const githubToken = process.env.GITHUB_TOKEN || '';
 
     // 1. Handle image upload if present
@@ -362,11 +363,14 @@ export const handler: Handler = async (event) => {
     // 3. Handle settings update
     if (type === 'settings' && settings) {
       const mergedSettings = { ...settings };
-      // Preserve existing admins if not explicitly provided in settings update
-      if (!mergedSettings.admins) {
+      // Preserve existing admins and categories when not explicitly provided in settings update
+      if (!mergedSettings.admins || mergedSettings.categories === undefined) {
         const currentSettings = await loadPersistedSettings(event);
-        if (currentSettings.admins) {
+        if (!mergedSettings.admins && currentSettings.admins) {
           mergedSettings.admins = currentSettings.admins;
+        }
+        if (mergedSettings.categories === undefined && currentSettings.categories !== undefined) {
+          mergedSettings.categories = currentSettings.categories;
         }
       }
 
@@ -447,6 +451,78 @@ export const handler: Handler = async (event) => {
         body: JSON.stringify({
           success: true,
           message: 'Change log saved.',
+        }),
+      };
+    }
+
+    // 6. Handle categories update (with cascade cleanup on products)
+    if (type === 'categories' && Array.isArray(categories)) {
+      const sanitizedCategories = categories
+        .filter((c: any) => c && typeof c.id === 'string' && typeof c.label === 'string')
+        .map((c: any) => {
+          const entry: { id: string; label: string; emoji?: string } = {
+            id: c.id.trim(),
+            label: c.label.trim(),
+          };
+          if (typeof c.emoji === 'string' && c.emoji.trim()) {
+            entry.emoji = c.emoji.trim();
+          }
+          return entry;
+        })
+        .filter((c: any) => c.id && c.label);
+
+      const currentSettings = await loadPersistedSettings(event);
+      currentSettings.categories = sanitizedCategories;
+      const settingsJson = JSON.stringify(currentSettings, null, 2) + '\n';
+      const settingsBase64 = Buffer.from(settingsJson).toString('base64');
+
+      await saveToNetlifyBlobs(event, 'settings', settingsJson);
+      if (githubToken) {
+        await commitToGitHub(
+          'src/data/settings.json',
+          settingsBase64,
+          'chore(admin): update catalog categories from studio portal'
+        );
+      } else {
+        writeJsonWithFallback('src/data/settings.json', TMP_SETTINGS_FILE, settingsJson);
+      }
+
+      const validIds = new Set(sanitizedCategories.map((c: any) => c.id));
+      const baseProducts = Array.isArray(products) ? products : await loadPersistedProducts(event);
+      const cleanedProducts = pruneRemovedCategories(baseProducts, validIds);
+      let productsChanged = Array.isArray(products);
+      if (!productsChanged) {
+        productsChanged = baseProducts.some((p: any, idx: number) => {
+          const cleaned = cleanedProducts[idx];
+          if (!Array.isArray(p.categories) || 'category' in p) return true;
+          if ((cleaned.categories?.length ?? 0) !== p.categories.length) return true;
+          return (cleaned.categories || []).some((id, i) => id !== p.categories[i]);
+        });
+      }
+
+      if (productsChanged) {
+        const productsJson = JSON.stringify(cleanedProducts, null, 2) + '\n';
+        const productsBase64 = Buffer.from(productsJson).toString('base64');
+        await saveToNetlifyBlobs(event, 'products', productsJson);
+        if (githubToken) {
+          await commitToGitHub(
+            'src/data/products.json',
+            productsBase64,
+            'chore(admin): remove deleted categories from catalog items'
+          );
+        } else {
+          writeJsonWithFallback('src/data/products.json', TMP_PRODUCTS_FILE, productsJson);
+        }
+      }
+
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          success: true,
+          message: githubToken
+            ? 'Categories saved and committed to GitHub. Netlify deploy triggered!'
+            : 'Categories saved locally (Dev Mode).',
         }),
       };
     }
