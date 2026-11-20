@@ -264,6 +264,108 @@ describe('ProductCard', () => {
 
     expect(screen.queryByText('NEW!')).not.toBeInTheDocument();
   });
+
+  describe('variant photo carousel', () => {
+    const galleryProduct: Product = {
+      ...mockProduct,
+      images: ['/bunny-base.jpg'],
+      availableVariants: ['magnet', 'keychain'],
+      variantPrices: {
+        magnet: 14.0,
+        keychain: 16.5,
+      },
+      variantImages: {
+        magnet: '/bunny-magnet.jpg',
+        keychain: '/bunny-keychain.jpg',
+      },
+    };
+
+    it('renders no carousel controls when product only has a base photo', () => {
+      render(
+        <CartProvider>
+          <ProductCard product={mockProduct} />
+        </CartProvider>
+      );
+
+      expect(screen.getByAltText('Strawberry Bunny')).toHaveAttribute('src', '/strawberry-bunny.jpg');
+      expect(screen.queryByRole('button', { name: /Previous photo/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Next photo/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /View Base photo/i })).not.toBeInTheDocument();
+    });
+
+    it('starts on the base photo on initial load and cycles through all photos with arrows and dots without changing selected style or price', () => {
+      render(
+        <CartProvider>
+          <ProductCard product={galleryProduct} />
+        </CartProvider>
+      );
+
+      // Initial state: Base photo shown, Magnet selected ($14.00)
+      expect(screen.getByAltText('Strawberry Bunny - Base')).toHaveAttribute('src', '/bunny-base.jpg');
+      expect(screen.getByText('$14.00')).toBeInTheDocument();
+
+      // Next -> Magnet photo
+      fireEvent.click(screen.getByRole('button', { name: /Next photo/i }));
+      expect(screen.getByAltText('Strawberry Bunny - Magnet')).toHaveAttribute(
+        'src',
+        '/bunny-magnet.jpg'
+      );
+
+      // Next -> Keychain photo (selected style stays Magnet at $14.00)
+      fireEvent.click(screen.getByRole('button', { name: /Next photo/i }));
+      expect(screen.getByAltText('Strawberry Bunny - Keychain')).toHaveAttribute(
+        'src',
+        '/bunny-keychain.jpg'
+      );
+      expect(screen.getByText('$14.00')).toBeInTheDocument();
+
+      // Next wraps around to Base
+      fireEvent.click(screen.getByRole('button', { name: /Next photo/i }));
+      expect(screen.getByAltText('Strawberry Bunny - Base')).toHaveAttribute('src', '/bunny-base.jpg');
+
+      // Previous wraps around to Keychain
+      fireEvent.click(screen.getByRole('button', { name: /Previous photo/i }));
+      expect(screen.getByAltText('Strawberry Bunny - Keychain')).toHaveAttribute(
+        'src',
+        '/bunny-keychain.jpg'
+      );
+
+      // Clicking Base dot jumps directly to Base
+      fireEvent.click(screen.getByRole('button', { name: /View Base photo/i }));
+      expect(screen.getByAltText('Strawberry Bunny - Base')).toHaveAttribute('src', '/bunny-base.jpg');
+    });
+
+    it('jumps to the clicked style variant photo, or back to base if that variant has no custom photo', () => {
+      const keychainOnlyPhotoProduct: Product = {
+        ...galleryProduct,
+        variantImages: {
+          keychain: '/bunny-keychain.jpg',
+        },
+      };
+
+      render(
+        <CartProvider>
+          <ProductCard product={keychainOnlyPhotoProduct} />
+        </CartProvider>
+      );
+
+      // Starts on Base
+      expect(screen.getByAltText('Strawberry Bunny - Base')).toHaveAttribute('src', '/bunny-base.jpg');
+
+      // Clicking Keychain jumps to Keychain photo and updates price
+      fireEvent.click(screen.getByRole('button', { name: /^keychain$/i }));
+      expect(screen.getByAltText('Strawberry Bunny - Keychain')).toHaveAttribute(
+        'src',
+        '/bunny-keychain.jpg'
+      );
+      expect(screen.getByText('$16.50')).toBeInTheDocument();
+
+      // Clicking Magnet (which has no custom photo) returns to Base photo
+      fireEvent.click(screen.getByRole('button', { name: /^magnet$/i }));
+      expect(screen.getByAltText('Strawberry Bunny - Base')).toHaveAttribute('src', '/bunny-base.jpg');
+      expect(screen.getByText('$14.00')).toBeInTheDocument();
+    });
+  });
 });
 
 describe('CatalogGrid', () => {
