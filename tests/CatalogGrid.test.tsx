@@ -145,4 +145,23 @@ describe('CatalogGrid dynamic categories', () => {
     expect(screen.getByText('Candy Bunny')).toBeInTheDocument();
     expect(screen.getByText('Starlight Ghost')).toBeInTheDocument();
   });
+
+  it('renders custom Markdown catalog title and subtitle from SettingsContext', () => {
+    localStorage.setItem(
+      'weebles_settings_v1',
+      JSON.stringify({
+        contactEmail: 'weeblesclay@gmail.com',
+        customOrderEmail: 'weeblesclay@gmail.com',
+        pageContent: {
+          catalogTitle: '[Fresh Drops]{color=pink} ![berry](/images/content/berry.png)',
+          catalogSubtitle: 'Sculpted with **care**!',
+        },
+      })
+    );
+
+    renderCatalog(sampleProducts);
+    expect(screen.getByText('Fresh Drops')).toHaveStyle({ color: '#FF85A1' });
+    expect(screen.getByAltText('berry')).toHaveAttribute('src', '/images/content/berry.png');
+    expect(screen.getByText('care').tagName).toBe('STRONG');
+  });
 });

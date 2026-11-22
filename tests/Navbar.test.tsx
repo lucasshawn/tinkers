@@ -83,7 +83,7 @@ describe('HeroBanner', () => {
     );
 
     expect(screen.getByText(/Tiny Polymer Clay Friends/i)).toBeInTheDocument();
-    expect(screen.getByText(/Hand-Sculpted & Glazed with UV Resin Love/i)).toBeInTheDocument();
+    expect(screen.getByText(/Hand-Sculpted Polymer Clay with Love/i)).toBeInTheDocument();
 
     const adoptBtn = screen.getByRole('button', { name: /Adopt a Weeble/i });
     fireEvent.click(adoptBtn);

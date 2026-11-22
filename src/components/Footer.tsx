@@ -1,11 +1,14 @@
 import React from 'react';
 import { Heart } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
+import { resolvePageContent } from '../utils/pageContentDefaults';
+import { RichMarkdown } from './RichMarkdown';
 import { getSocialLinkLabel, getVisibleSocialLinks } from '../utils/socialPlatforms';
 import { SocialIconBadge } from './SocialIcon';
 
 export const Footer: React.FC = () => {
   const { settings } = useSettings();
+  const content = resolvePageContent(settings?.pageContent);
   const contactEmail = settings?.contactEmail || 'weeblesclay@gmail.com';
   const visibleSocials = getVisibleSocialLinks(settings);
 
@@ -25,14 +28,14 @@ export const Footer: React.FC = () => {
 
         {/* Clay Care instructions */}
         <div className="bg-weeble-pinkBg p-5 rounded-3xl border border-pink-100">
-          <h3 className="font-bubble text-lg font-bold text-weeble-text mb-2 flex items-center gap-1.5">
-            <span>✨</span> Clay Care Instructions
+          <h3 className="font-bubble text-lg font-bold text-weeble-text mb-2">
+            <RichMarkdown content={content.footerCareTitle} mode="inline" />
           </h3>
-          <ul className="text-xs text-weeble-textMuted space-y-1.5">
-            <li>• Water-resistant UV resin finish (do not soak or run through dishwasher).</li>
-            <li>• Clean gently with a soft microfiber cloth or damp wipe.</li>
-            <li>• Handle with love! Strong neodymium magnets are embedded securely.</li>
-          </ul>
+          <RichMarkdown
+            content={content.footerCareBody}
+            mode="block"
+            className="text-xs text-weeble-textMuted space-y-1.5"
+          />
         </div>
 
         {/* Quick Links & Contact */}

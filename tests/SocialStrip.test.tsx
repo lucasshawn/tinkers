@@ -109,4 +109,20 @@ describe('SocialStrip', () => {
     expect(container.querySelector('[data-social-icon="etsy"]')).toBeInTheDocument();
     expect(container.querySelector('[data-social-icon="pinterest"]')).toBeInTheDocument();
   });
+
+  it('renders custom Markdown badge, title, and subtitle from pageContent settings', () => {
+    renderWithSettings({
+      pageContent: {
+        ...DEFAULT_SETTINGS.pageContent!,
+        socialBadge: '**Live** Restocks ![sparkle](/images/content/sparkle.png)',
+        socialTitle: 'Join Our [Clay Club]{color=pink}',
+        socialSubtitle: 'Watch *weekly* drops!',
+      },
+    });
+
+    expect(screen.getByText('Live').tagName).toBe('STRONG');
+    expect(screen.getByAltText('sparkle')).toHaveAttribute('src', '/images/content/sparkle.png');
+    expect(screen.getByText('Clay Club')).toHaveStyle({ color: '#FF85A1' });
+    expect(screen.getByText('weekly').tagName).toBe('EM');
+  });
 });

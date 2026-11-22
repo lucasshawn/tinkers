@@ -1,6 +1,8 @@
 import React from 'react';
 import { ExternalLink } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
+import { resolvePageContent } from '../utils/pageContentDefaults';
+import { RichMarkdown } from './RichMarkdown';
 import {
   getFallbackSubtitle,
   getSocialLinkLabel,
@@ -17,6 +19,7 @@ function getGridClass(count: number): string {
 
 export const SocialStrip: React.FC = () => {
   const { settings } = useSettings();
+  const content = resolvePageContent(settings.pageContent);
   const visibleLinks = getVisibleSocialLinks(settings);
 
   if (visibleLinks.length === 0) {
@@ -30,15 +33,19 @@ export const SocialStrip: React.FC = () => {
     >
       <div className="bg-gradient-to-r from-pink-100 via-weeble-pinkWash to-purple-100 rounded-3xl p-6 sm:p-8 border-2 border-pink-200 shadow-pillow">
         <div className="text-center max-w-2xl mx-auto mb-6">
-          <span className="text-xs font-bold text-pink-600 bg-white px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
-            ✨ Behind the Scenes & Restocks
-          </span>
+          {content.socialBadge.trim() && (
+            <span className="inline-block text-xs font-bold text-pink-600 bg-white px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
+              <RichMarkdown content={content.socialBadge} mode="inline" />
+            </span>
+          )}
           <h2 className="font-bubble text-2xl sm:text-3xl font-bold text-weeble-text mt-2 mb-1">
-            Follow the Sculpting Journey!
+            <RichMarkdown content={content.socialTitle} mode="inline" />
           </h2>
-          <p className="text-xs sm:text-sm text-weeble-textMuted">
-            Watch our clay ASMR sculpting clips, packaging videos with cute stickers, and catch live restock alerts!
-          </p>
+          {content.socialSubtitle.trim() && (
+            <p className="text-xs sm:text-sm text-weeble-textMuted">
+              <RichMarkdown content={content.socialSubtitle} mode="inline" />
+            </p>
+          )}
         </div>
 
         <div className={getGridClass(visibleLinks.length)}>

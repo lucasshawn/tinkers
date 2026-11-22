@@ -3,6 +3,8 @@ import { CategoryOption, Product } from '../types';
 import { ProductCard } from './ProductCard';
 import { DEFAULT_CATEGORIES, filterProducts, formatCategoryLabel } from '../utils/productUtils';
 import { useSettings } from '../context/SettingsContext';
+import { resolvePageContent } from '../utils/pageContentDefaults';
+import { RichMarkdown } from './RichMarkdown';
 import { Search } from 'lucide-react';
 
 interface CatalogGridProps {
@@ -30,6 +32,7 @@ export const CatalogGrid: React.FC<CatalogGridProps> = ({
   categories,
 }) => {
   const { settings } = useSettings();
+  const content = resolvePageContent(settings.pageContent);
   const activeCategories = categories ?? settings.categories ?? DEFAULT_CATEGORIES;
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,13 +62,14 @@ export const CatalogGrid: React.FC<CatalogGridProps> = ({
     <section id="catalog" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
-          <h2 className="font-bubble text-3xl sm:text-4xl font-bold text-weeble-text mb-1 flex items-center gap-2">
-            <span>Available Creations</span>
-            <span>🍓</span>
+          <h2 className="font-bubble text-3xl sm:text-4xl font-bold text-weeble-text mb-1">
+            <RichMarkdown content={content.catalogTitle} mode="inline" />
           </h2>
-          <p className="text-sm text-weeble-textMuted">
-            Each piece is individually sculpted, baked, and detailed by hand.
-          </p>
+          {content.catalogSubtitle.trim() && (
+            <p className="text-sm text-weeble-textMuted">
+              <RichMarkdown content={content.catalogSubtitle} mode="inline" />
+            </p>
+          )}
         </div>
 
         {/* Search Bar */}

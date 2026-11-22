@@ -58,4 +58,25 @@ describe('Footer', () => {
     });
     expect(screen.queryByLabelText(/Social media links/i)).not.toBeInTheDocument();
   });
+
+  it('renders default Clay Care instructions without UV resin and supports custom Markdown overrides', () => {
+    const { container, unmount } = renderFooter();
+    expect(screen.getByText(/Clay Care Instructions/i)).toBeInTheDocument();
+    expect(container.textContent).toContain('Durable baked polymer clay finish');
+    expect(container.textContent).not.toMatch(/uv resin/i);
+    unmount();
+
+    renderFooter({
+      pageContent: {
+        ...DEFAULT_SETTINGS.pageContent!,
+        footerCareTitle: '**Care** Guide ![heart](/images/content/heart.png)',
+        footerCareBody: '- Keep *dry*\n- Wipe gently',
+      },
+    });
+
+    expect(screen.getByText('Care').tagName).toBe('STRONG');
+    expect(screen.getByAltText('heart')).toHaveAttribute('src', '/images/content/heart.png');
+    expect(screen.getByText('dry').tagName).toBe('EM');
+    expect(screen.getByText(/Wipe gently/i)).toBeInTheDocument();
+  });
 });

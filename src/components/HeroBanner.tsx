@@ -1,5 +1,8 @@
 import React from 'react';
 import { Sparkles, Heart } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext';
+import { resolvePageContent } from '../utils/pageContentDefaults';
+import { RichMarkdown } from './RichMarkdown';
 
 interface HeroBannerProps {
   onExploreClick: () => void;
@@ -7,6 +10,9 @@ interface HeroBannerProps {
 }
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreClick, onCustomClick }) => {
+  const { settings } = useSettings();
+  const content = resolvePageContent(settings.pageContent);
+
   return (
     <section className="relative overflow-hidden pt-8 pb-14 px-4 sm:px-6 lg:px-8">
       {/* Decorative background bubbles */}
@@ -18,22 +24,22 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreClick, onCustom
         {/* Sweet pill badge */}
         <div className="inline-flex items-center gap-2 bg-white/90 border-2 border-pink-200 text-weeble-text font-bold px-4 py-1.5 rounded-full shadow-sm text-xs sm:text-sm mb-6">
           <Sparkles className="w-4 h-4 text-weeble-pink fill-weeble-pink" />
-          <span>Hand-Sculpted & Glazed with UV Resin Love</span>
+          <span>
+            <RichMarkdown content={content.heroTagline} mode="inline" />
+          </span>
           <Heart className="w-4 h-4 text-weeble-pink fill-weeble-pink" />
         </div>
 
         {/* Playful Headline */}
         <h1 className="font-bubble text-4xl sm:text-6xl lg:text-7xl font-bold text-weeble-text leading-tight mb-6">
-          Tiny Polymer Clay Friends for Your{' '}
-          <span className="text-weeble-pink underline decoration-pink-300 decoration-wavy text-shadow-cute">
-            Fridge & Keys
-          </span>{' '}
-          ✨
+          <RichMarkdown content={content.heroTitle} mode="inline" />
         </h1>
 
-        <p className="max-w-2xl mx-auto text-weeble-textMuted text-base sm:text-lg font-medium mb-8 leading-relaxed">
-          Welcome to the Weeble sanctuary! Each little critter is uniquely sculpted from high-grade polymer clay, hand-painted with pastel details, and cured with a water-resistant protective shine.
-        </p>
+        {content.heroSubtitle.trim() && (
+          <p className="max-w-2xl mx-auto text-weeble-textMuted text-base sm:text-lg font-medium mb-8 leading-relaxed">
+            <RichMarkdown content={content.heroSubtitle} mode="inline" />
+          </p>
+        )}
 
         {/* CTA Buttons */}
         <div className="flex flex-wrap items-center justify-center gap-4">
