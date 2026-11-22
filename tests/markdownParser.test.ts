@@ -179,4 +179,53 @@ describe('markdownParser & RichMarkdown', () => {
     expect(screen.queryByAltText('svg1')).toBeNull();
     expect(screen.queryByAltText('svg2')).toBeNull();
   });
+
+  it('preserves quoted multi-font CSS stacks and rejects unbalanced quotes in font-family', () => {
+    render(
+      React.createElement(RichMarkdown, {
+        content:
+          `<span style='font-family: "Fredoka", cursive, sans-serif'>Multi</span> ` +
+          `[Times]{font='"Times New Roman", serif'} ` +
+          `<span style='font-family: Fredoka", cursive'>Broken</span>`,
+        mode: 'inline',
+      })
+    );
+
+    const multi = screen.getByText('Multi');
+    expect(multi.style.fontFamily).toBe('"Fredoka", cursive, sans-serif');
+
+    const times = screen.getByText('Times');
+    expect(times.style.fontFamily).toBe('"Times New Roman", serif');
+
+    const broken = screen.getByText('Broken');
+    expect(broken.style.fontFamily).toBe('');
+  });
+
+  it('blocks SVG/SVGZ in query strings and non-raster root-relative image paths while allowing raster & content-image endpoints', () => {
+    render(
+      React.createElement(RichMarkdown, {
+        content:
+          '![svgq](/.netlify/functions/admin-save?action=content-image&name=evil.svg&v=1) ' +
+          '![svgproxy](https://example.com/proxy?file=evil.svg) ' +
+          '![svgz](https://example.com/a.svgz) ' +
+          '![txt](/images/content/readme.txt) ' +
+          '![noext](/images/content/noext) ' +
+          '![fnok](/.netlify/functions/admin-save?action=content-image&name=ok.png) ' +
+          '![okq](/images/content/star.webp?v=2#top)',
+        mode: 'inline',
+      })
+    );
+
+    expect(screen.queryByAltText('svgq')).toBeNull();
+    expect(screen.queryByAltText('svgproxy')).toBeNull();
+    expect(screen.queryByAltText('svgz')).toBeNull();
+    expect(screen.queryByAltText('txt')).toBeNull();
+    expect(screen.queryByAltText('noext')).toBeNull();
+
+    expect(screen.getByAltText('fnok')).toHaveAttribute(
+      'src',
+      '/.netlify/functions/admin-save?action=content-image&name=ok.png'
+    );
+    expect(screen.getByAltText('okq')).toHaveAttribute('src', '/images/content/star.webp?v=2#top');
+  });
 });

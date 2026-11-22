@@ -58,7 +58,8 @@ const SAFE_FONT_RE = /^[a-zA-Z0-9\s,'"-]{1,60}$/;
 const SAFE_SIZE_PX_RE = /^(\d{1,2}(?:\.\d+)?)px$/i;
 const SAFE_SIZE_EM_RE = /^(\d(?:\.\d+)?)(em|rem)$/i;
 const RASTER_DATA_URL_RE = /^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=\s]+$/i;
-const SVG_URL_RE = /\.svg(?:$|[?#])/i;
+const SVG_URL_RE = /\.(?:svgz?)(?:$|[?#&/])/i;
+const RASTER_EXT_RE = /\.(?:png|jpe?g|webp|gif)$/i;
 
 function sanitizeColor(raw: string): string | undefined {
   const trimmed = raw.trim();
@@ -76,9 +77,26 @@ function sanitizeColor(raw: string): string | undefined {
   return undefined;
 }
 
+function hasBalancedQuotes(str: string): boolean {
+  let single = 0;
+  let double = 0;
+  for (const ch of str) {
+    if (ch === "'") single++;
+    else if (ch === '"') double++;
+  }
+  return single % 2 === 0 && double % 2 === 0;
+}
+
 function sanitizeFont(raw: string): string | undefined {
-  const trimmed = raw.trim().replace(/^['"]|['"]$/g, '').trim();
-  if (!trimmed) return undefined;
+  let trimmed = raw.trim();
+  const outerMatch = trimmed.match(/^(['"])(.*)\1$/);
+  if (outerMatch) {
+    const [, quote, inner] = outerMatch;
+    if (!inner.includes(quote) && hasBalancedQuotes(inner)) {
+      trimmed = inner.trim();
+    }
+  }
+  if (!trimmed || !hasBalancedQuotes(trimmed)) return undefined;
   const preset = MARKDOWN_FONT_PRESETS[trimmed.toLowerCase()];
   if (preset) return preset;
   if (SAFE_FONT_RE.test(trimmed)) return trimmed;
@@ -121,19 +139,53 @@ function sanitizeHref(raw: string): { href: string; external: boolean } | null {
   return null;
 }
 
+function hasSvgExtension(value: string): boolean {
+  if (SVG_URL_RE.test(value)) return true;
+  try {
+    const decoded = decodeURIComponent(value);
+    if (decoded !== value && SVG_URL_RE.test(decoded)) return true;
+  } catch {
+    // Ignore malformed percent-encoding
+  }
+  return false;
+}
+
 function sanitizeImageSrc(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
+  if (hasSvgExtension(trimmed)) return null;
+
   if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
-    return SVG_URL_RE.test(trimmed) ? null : trimmed;
+    const pathPart = trimmed.split(/[?#]/, 1)[0];
+    if (RASTER_EXT_RE.test(pathPart)) {
+      return trimmed;
+    }
+    if (trimmed.includes('?')) {
+      try {
+        const parsed = new URL(trimmed, 'https://localhost');
+        if (
+          parsed.pathname === '/.netlify/functions/admin-save' &&
+          parsed.searchParams.get('action') === 'content-image' &&
+          RASTER_EXT_RE.test(parsed.searchParams.get('name') ?? '')
+        ) {
+          return trimmed;
+        }
+      } catch {
+        return null;
+      }
+    }
+    return null;
   }
+
   if (RASTER_DATA_URL_RE.test(trimmed)) {
     return trimmed;
   }
+
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-      return SVG_URL_RE.test(parsed.pathname) ? null : trimmed;
+      if (hasSvgExtension(parsed.href)) return null;
+      return trimmed;
     }
   } catch {
     return null;
@@ -177,7 +229,7 @@ function parseShorthandAttrs(attrStr: string): SpanStyleProps {
   while ((match = tokenRe.exec(attrStr)) !== null) {
     if (match[1] && match[2]) {
       const key = match[1].toLowerCase();
-      const rawVal = match[2].replace(/^['"]|['"]$/g, '');
+      const rawVal = match[2].replace(/^(['"])(.*)\1$/, '$2');
       if (key === 'color') {
         const c = sanitizeColor(rawVal);
         if (c) style.color = c;
