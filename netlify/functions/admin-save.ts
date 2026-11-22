@@ -26,6 +26,38 @@ const CONTENT_IMAGE_MIME_BY_EXT: Record<string, string> = {
 };
 const SAFE_CONTENT_IMAGE_NAME_RE = /^[a-zA-Z0-9._-]+\.(png|jpe?g|webp|gif)$/i;
 const SAFE_DATA_IMAGE_PREFIX_RE = /^data:image\/(png|jpe?g|webp|gif);base64,/i;
+const VALID_BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+
+function isValidRasterImageBytes(buffer: Buffer): boolean {
+  if (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  ) {
+    return true;
+  }
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return true;
+  }
+  if (buffer.length >= 6) {
+    const gifHeader = buffer.subarray(0, 6).toString('ascii');
+    if (gifHeader === 'GIF87a' || gifHeader === 'GIF89a') return true;
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+  ) {
+    return true;
+  }
+  return false;
+}
 
 function filterRecentChanges(entries: any[], now: number = Date.now()): any[] {
   const cutoff = now - CHANGE_LOG_RETENTION_MS;
@@ -323,8 +355,9 @@ export const handler: Handler = async (event): Promise<HandlerResponse> => {
       return {
         statusCode: 200,
         headers: {
-          'Content-Type': blobImg.contentType || contentType,
+          'Content-Type': contentType,
           'Cache-Control': 'public, max-age=3600',
+          'X-Content-Type-Options': 'nosniff',
         },
         body: blobImg.base64,
         isBase64Encoded: true,
@@ -344,6 +377,7 @@ export const handler: Handler = async (event): Promise<HandlerResponse> => {
             headers: {
               'Content-Type': contentType,
               'Cache-Control': 'public, max-age=3600',
+              'X-Content-Type-Options': 'nosniff',
             },
             body: buf.toString('base64'),
             isBase64Encoded: true,
@@ -611,7 +645,13 @@ export const handler: Handler = async (event): Promise<HandlerResponse> => {
 
     // 7. Handle inline content PNG/image upload
     if (type === 'content-image') {
-      if (!contentImage?.filename || !contentImage?.base64Data) {
+      if (
+        !contentImage ||
+        typeof contentImage.filename !== 'string' ||
+        typeof contentImage.base64Data !== 'string' ||
+        !contentImage.filename.trim() ||
+        !contentImage.base64Data.trim()
+      ) {
         return {
           statusCode: 400,
           headers: { 'Content-Type': 'application/json' },
@@ -619,8 +659,8 @@ export const handler: Handler = async (event): Promise<HandlerResponse> => {
         };
       }
 
-      const rawDataStr = String(contentImage.base64Data).trim();
-      if (rawDataStr.startsWith('data:') && !SAFE_DATA_IMAGE_PREFIX_RE.test(rawDataStr)) {
+      const rawDataStr = contentImage.base64Data.trim();
+      if (/^data:/i.test(rawDataStr) && !SAFE_DATA_IMAGE_PREFIX_RE.test(rawDataStr)) {
         return {
           statusCode: 400,
           headers: { 'Content-Type': 'application/json' },
@@ -631,7 +671,7 @@ export const handler: Handler = async (event): Promise<HandlerResponse> => {
       }
 
       const sanitized = path
-        .basename(String(contentImage.filename))
+        .basename(contentImage.filename)
         .replace(/[^a-zA-Z0-9._-]/g, '');
       const ext = path.extname(sanitized).toLowerCase();
       const contentType = CONTENT_IMAGE_MIME_BY_EXT[ext];
@@ -645,7 +685,15 @@ export const handler: Handler = async (event): Promise<HandlerResponse> => {
         };
       }
 
-      const rawBase64 = rawDataStr.replace(SAFE_DATA_IMAGE_PREFIX_RE, '');
+      const rawBase64 = rawDataStr.replace(SAFE_DATA_IMAGE_PREFIX_RE, '').replace(/\s+/g, '');
+      if (!VALID_BASE64_RE.test(rawBase64)) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Invalid base64 image data.' }),
+        };
+      }
+
       const buffer = Buffer.from(rawBase64, 'base64');
       if (buffer.length === 0) {
         return {
@@ -661,7 +709,17 @@ export const handler: Handler = async (event): Promise<HandlerResponse> => {
           body: JSON.stringify({ error: 'Image exceeds 2 MB limit. Please use a smaller PNG.' }),
         };
       }
+      if (!isValidRasterImageBytes(buffer)) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Invalid raster image content. Please upload a valid PNG, JPG, WEBP, or GIF file.',
+          }),
+        };
+      }
 
+      const canonicalBase64 = buffer.toString('base64');
       const stem =
         sanitized
           .slice(0, sanitized.length - ext.length)
@@ -671,28 +729,40 @@ export const handler: Handler = async (event): Promise<HandlerResponse> => {
       const cleanFilename = `${stem}-${Date.now()}${ext}`;
       const imagePath = `public/images/content/${cleanFilename}`;
 
-      await saveToNetlifyBlobs(
+      const savedToBlobs = await saveToNetlifyBlobs(
         event,
         `content-image:${cleanFilename}`,
-        JSON.stringify({ contentType, base64: rawBase64 })
+        JSON.stringify({ contentType, base64: canonicalBase64 })
       );
 
+      let persisted = savedToBlobs;
       if (githubToken) {
         await commitToGitHub(
           imagePath,
-          rawBase64,
+          canonicalBase64,
           `chore(admin): upload storefront content image ${cleanFilename}`
         );
+        persisted = true;
       } else {
         const localDir = path.resolve(process.cwd(), 'public/images/content');
         try {
           if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
           fs.writeFileSync(path.join(localDir, cleanFilename), buffer);
+          persisted = true;
         } catch {
           try {
             fs.writeFileSync(path.join(os.tmpdir(), `weebles-content-img-${cleanFilename}`), buffer);
+            persisted = true;
           } catch {}
         }
+      }
+
+      if (!persisted) {
+        return {
+          statusCode: 500,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Failed to persist uploaded image' }),
+        };
       }
 
       return {

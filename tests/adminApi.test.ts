@@ -1150,7 +1150,7 @@ describe('admin-save Netlify Function', () => {
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
     globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ contentType: 'image/png', base64: rawB64 }),
+      json: async () => ({ contentType: 'image/svg+xml', base64: rawB64 }),
     });
     const blobsPayload = Buffer.from(
       JSON.stringify({ url: 'https://edge.netlify.com', token: 'netlify-blobs-token-xyz' })
@@ -1167,6 +1167,7 @@ describe('admin-save Netlify Function', () => {
     )) as any;
     expect(blobRes.statusCode).toBe(200);
     expect(blobRes.headers['Content-Type']).toBe('image/png');
+    expect(blobRes.headers['X-Content-Type-Options']).toBe('nosniff');
     expect(blobRes.headers['Cache-Control']).toContain('max-age=');
     expect(blobRes.isBase64Encoded).toBe(true);
     expect(blobRes.body).toBe(rawB64);
@@ -1186,6 +1187,7 @@ describe('admin-save Netlify Function', () => {
     )) as any;
     expect(fsRes.statusCode).toBe(200);
     expect(fsRes.headers['Content-Type']).toBe('image/png');
+    expect(fsRes.headers['X-Content-Type-Options']).toBe('nosniff');
     expect(fsRes.isBase64Encoded).toBe(true);
     expect(fsRes.body).toBe(rawB64);
 
@@ -1200,6 +1202,131 @@ describe('admin-save Netlify Function', () => {
       {} as any
     )) as any;
     expect(missingRes.statusCode).toBe(404);
+  });
+
+  it('rejects uppercase DATA: SVG URIs, invalid base64, disguised non-raster payloads, and returns 500 when all persistence targets fail', async () => {
+    const uppercaseSvgRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: { filename: 'spoof.png', base64Data: 'DATA:image/svg+xml;base64,PHN2Zz4=' },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(uppercaseSvgRes.statusCode).toBe(400);
+
+    const invalidB64Res = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: { filename: 'broken.png', base64Data: 'data:image/png;base64,not@valid!b64' },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(invalidB64Res.statusCode).toBe(400);
+
+    const nonStringRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: { filename: 123, base64Data: 'data:image/png;base64,iVBORw0KGgo=' },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(nonStringRes.statusCode).toBe(400);
+
+    const disguisedSvgB64 = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>').toString('base64');
+    const disguisedRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: {
+            filename: 'disguised.png',
+            base64Data: `data:image/png;base64,${disguisedSvgB64}`,
+          },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(disguisedRes.statusCode).toBe(400);
+
+    // Accepts genuine JPEG, GIF, and WEBP magic bytes and canonicalizes whitespace in base64
+    const jpegB64 = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]).toString('base64');
+    const jpegWithWhitespace = `${jpegB64.slice(0, 4)}\n ${jpegB64.slice(4)}`;
+    const jpegRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: {
+            filename: 'photo.jpg',
+            base64Data: `data:image/jpeg;base64,${jpegWithWhitespace}`,
+          },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(jpegRes.statusCode).toBe(200);
+
+    const gifB64 = Buffer.from('GIF89a\x01\x00\x01\x00', 'binary').toString('base64');
+    const gifRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: { filename: 'anim.gif', base64Data: `data:image/gif;base64,${gifB64}` },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(gifRes.statusCode).toBe(200);
+
+    const webpB64 = Buffer.from('RIFF\x10\x00\x00\x00WEBP', 'binary').toString('base64');
+    const webpRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: { filename: 'clay.webp', base64Data: `data:image/webp;base64,${webpB64}` },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(webpRes.statusCode).toBe(200);
+
+    // Returns 500 when !githubToken, Blobs unavailable, and both local + tmp disk writes fail
+    vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {
+      throw new Error('EACCES: read-only filesystem');
+    });
+    const tinyPngBase64 =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const persistFailRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: { filename: 'star.png', base64Data: tinyPngBase64 },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(persistFailRes.statusCode).toBe(500);
+    expect(JSON.parse(persistFailRes.body).error).toMatch(/failed to persist uploaded image/i);
   });
 });
 
