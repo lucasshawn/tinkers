@@ -1,4 +1,5 @@
 import { LegacySocials, SiteSettings, SocialLink, SocialPlatformId } from '../types/settings';
+import { DEFAULT_PAGE_CONTENT, resolvePageContent } from './pageContentDefaults';
 
 export interface SocialPlatformMeta {
   id: SocialPlatformId;
@@ -357,6 +358,8 @@ export function normalizeSettings(
   defaults: SiteSettings
 ): SiteSettings {
   const socialLinks = normalizeSocialLinks(raw, defaults);
+  const defaultPageContent = resolvePageContent(defaults.pageContent, DEFAULT_PAGE_CONTENT);
+  const pageContent = resolvePageContent(raw?.pageContent, defaultPageContent);
   const socialLinksEnabled =
     typeof raw?.socialLinksEnabled === 'boolean'
       ? raw.socialLinksEnabled
@@ -377,6 +380,7 @@ export function normalizeSettings(
     socials,
     socialLinksEnabled,
     socialLinks,
+    pageContent,
     ...(Array.isArray(raw?.categories) ? { categories: raw.categories } : Array.isArray(defaults.categories) ? { categories: defaults.categories } : {}),
   };
 }

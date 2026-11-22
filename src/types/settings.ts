@@ -41,6 +41,19 @@ export interface CategoryOption {
   emoji?: string;
 }
 
+export interface PageContentSettings {
+  heroTagline: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  socialBadge: string;
+  socialTitle: string;
+  socialSubtitle: string;
+  catalogTitle: string;
+  catalogSubtitle: string;
+  footerCareTitle: string;
+  footerCareBody: string;
+}
+
 export interface SiteSettings {
   contactEmail: string;
   customOrderEmail: string;
@@ -48,6 +61,7 @@ export interface SiteSettings {
   socialLinksEnabled?: boolean;
   socialLinks?: SocialLink[];
   announcementBanner?: AnnouncementBannerSettings;
+  pageContent?: PageContentSettings;
   admins?: string[];
   categories?: CategoryOption[];
 }

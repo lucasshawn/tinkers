@@ -1,5 +1,6 @@
 import { Product, ChangeLogEntry, SiteSettings } from '../types';
 import { formatPrice, getProductCategories } from './productUtils';
+import { PAGE_CONTENT_KEYS, PAGE_CONTENT_LABELS, resolvePageContent } from './pageContentDefaults';
 
 export const CHANGES_STORAGE_KEY = 'weebles_changes_log_v1';
 export const CHANGE_LOG_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -278,6 +279,18 @@ export function diffSettingsChanges(
       oldVal: summarizeLinks(oldSettings.socialLinks),
       newVal: summarizeLinks(newSettings.socialLinks),
     });
+  }
+
+  if (oldSettings.pageContent || newSettings.pageContent) {
+    const oldContent = resolvePageContent(oldSettings.pageContent);
+    const newContent = resolvePageContent(newSettings.pageContent);
+    for (const key of PAGE_CONTENT_KEYS) {
+      comparisons.push({
+        label: `Site Content - ${PAGE_CONTENT_LABELS[key]}`,
+        oldVal: oldContent[key] || '(empty)',
+        newVal: newContent[key] || '(empty)',
+      });
+    }
   }
 
   for (const cmp of comparisons) {

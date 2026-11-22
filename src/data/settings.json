@@ -37,6 +37,18 @@
     "enabled": false,
     "text": ""
   },
+  "pageContent": {
+    "heroTagline": "Hand-Sculpted Polymer Clay with Love",
+    "heroTitle": "Tiny Polymer Clay Friends for Your [Fridge & Keys]{color=pink wavy} ✨",
+    "heroSubtitle": "Welcome to the Weeble sanctuary! Each little critter is uniquely sculpted from high-grade polymer clay, hand-painted with pastel details, and baked to a durable finish.",
+    "socialBadge": "✨ Behind the Scenes & Restocks",
+    "socialTitle": "Follow the Sculpting Journey!",
+    "socialSubtitle": "Watch our clay ASMR sculpting clips, packaging videos with cute stickers, and catch live restock alerts!",
+    "catalogTitle": "Available Creations 🍓",
+    "catalogSubtitle": "Each piece is individually sculpted, baked, and detailed by hand.",
+    "footerCareTitle": "✨ Clay Care Instructions",
+    "footerCareBody": "- Durable baked polymer clay finish (do not soak or run through dishwasher).\n- Clean gently with a soft microfiber cloth or damp wipe.\n- Handle with love! Strong neodymium magnets are embedded securely."
+  },
   "admins": [
     "lucasshawn@gmail.com",
     "lucascierra24@gmail.com"

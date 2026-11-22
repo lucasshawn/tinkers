@@ -165,4 +165,33 @@ describe('SettingsContext', () => {
       'mini-friends',
     ]);
   });
+
+  it('provides default pageContent without UV resin mentions and merges partial legacy localStorage settings', () => {
+    const { result: defaultResult } = renderHook(() => useSettings(), { wrapper });
+    expect(defaultResult.current.settings.pageContent?.heroTagline).toBe(
+      'Hand-Sculpted Polymer Clay with Love'
+    );
+    expect(defaultResult.current.settings.pageContent?.heroTitle).toBe(
+      'Tiny Polymer Clay Friends for Your [Fridge & Keys]{color=pink wavy} ✨'
+    );
+    expect(defaultResult.current.settings.pageContent?.heroTagline).not.toMatch(/uv resin/i);
+    expect(defaultResult.current.settings.pageContent?.footerCareBody).not.toMatch(/uv resin/i);
+
+    localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        contactEmail: 'legacy@weebles.com',
+        customOrderEmail: 'legacy@weebles.com',
+        pageContent: {
+          heroTitle: '**Custom** Title',
+          catalogSubtitle: '',
+        },
+      })
+    );
+
+    const { result: partialResult } = renderHook(() => useSettings(), { wrapper });
+    expect(partialResult.current.settings.pageContent?.heroTitle).toBe('**Custom** Title');
+    expect(partialResult.current.settings.pageContent?.catalogSubtitle).toBe('');
+    expect(partialResult.current.settings.pageContent?.catalogTitle).toBe('Available Creations 🍓');
+  });
 });

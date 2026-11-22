@@ -239,6 +239,44 @@ describe('changeLogUtils', () => {
         },
       ]);
     });
+
+    it('logs field-level changes for pageContent Markdown fields', () => {
+      const oldWithCopy: SiteSettings = {
+        ...baseSettings,
+        pageContent: {
+          heroTagline: 'Hand-Sculpted Polymer Clay with Love',
+          heroTitle: 'Tiny Polymer Clay Friends for Your [Fridge & Keys]{color=pink wavy} ✨',
+          heroSubtitle: 'Original subtitle',
+          socialBadge: '✨ Behind the Scenes & Restocks',
+          socialTitle: 'Follow the Sculpting Journey!',
+          socialSubtitle: 'Watch our clips',
+          catalogTitle: 'Available Creations 🍓',
+          catalogSubtitle: 'Sculpted by hand.',
+          footerCareTitle: '✨ Clay Care Instructions',
+          footerCareBody: '- Care line 1',
+        },
+      };
+      const newWithCopy: SiteSettings = {
+        ...oldWithCopy,
+        pageContent: {
+          ...oldWithCopy.pageContent!,
+          heroTagline: '**Fresh** Polymer Clay Friends',
+          catalogSubtitle: '',
+        },
+      };
+
+      const entries = diffSettingsChanges(adminEmail, oldWithCopy, newWithCopy, fixedNow);
+      expect(entries.map((e) => ({ change: e.change, comment: e.comment }))).toEqual([
+        {
+          change: 'Site Content - Hero Tagline',
+          comment: 'Old: Hand-Sculpted Polymer Clay with Love -> New: **Fresh** Polymer Clay Friends',
+        },
+        {
+          change: 'Site Content - Catalog Subtitle',
+          comment: 'Old: Sculpted by hand. -> New: (empty)',
+        },
+      ]);
+    });
   });
 
   describe('diffAdminsChanges', () => {
