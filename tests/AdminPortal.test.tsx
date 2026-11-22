@@ -481,4 +481,60 @@ describe('AdminPortal', () => {
     expect(screen.getByText('Error: Save Categories')).toBeInTheDocument();
     expect(screen.getByText(/ERROR: Category delete failed \(500\)/i)).toBeInTheDocument();
   });
+
+  it('optimistically embeds uploaded variant photo base64 preview into localStorage while sending canonical path to adminApi', async () => {
+    adminAuth.setSession({ token: 'valid-token', email: 'lucasshawn@gmail.com', name: 'Shawn' });
+    const saveInventorySpy = vi.spyOn(adminApi, 'saveInventory').mockResolvedValue({
+      success: true,
+      message: 'Inventory saved!',
+    });
+    vi.spyOn(adminApi, 'saveChanges').mockResolvedValue({
+      success: true,
+      message: 'Changes saved.',
+    });
+
+    const originalFileReader = window.FileReader;
+    const mockDataUrl = 'data:image/png;base64,dmFyaWFudHBob3Rv';
+    class MockFileReader {
+      onload: (() => void) | null = null;
+      result: string | ArrayBuffer | null = null;
+      readAsDataURL() {
+        this.result = mockDataUrl;
+        if (this.onload) this.onload();
+      }
+    }
+    // @ts-expect-error Mocking FileReader
+    window.FileReader = MockFileReader;
+
+    render(
+      <SettingsProvider>
+        <AdminPortal />
+      </SettingsProvider>
+    );
+
+    const editBtns = screen.getAllByRole('button', { name: /Edit/i });
+    fireEvent.click(editBtns[0]); // Chubby Bumblebee (weeble-bumblebee)
+
+    fireEvent.change(screen.getByLabelText(/Upload Magnet photo/i), {
+      target: { files: [new File(['m'], 'mag.png', { type: 'image/png' })] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Save Weeble/i }));
+
+    await waitFor(() => {
+      expect(saveInventorySpy).toHaveBeenCalledTimes(1);
+    });
+
+    const [apiProducts, apiNewImages] = saveInventorySpy.mock.calls[0];
+    expect(apiProducts[0].variantImages?.magnet).toBe(
+      '/images/products/weeble-bumblebee-magnet-mag.png'
+    );
+    expect(apiNewImages).toEqual([
+      { filename: 'weeble-bumblebee-magnet-mag.png', base64Data: mockDataUrl },
+    ]);
+
+    const stored = JSON.parse(localStorage.getItem('weebles_products_v1') || '[]');
+    expect(stored[0].variantImages?.magnet).toBe(mockDataUrl);
+
+    window.FileReader = originalFileReader;
+  });
 });

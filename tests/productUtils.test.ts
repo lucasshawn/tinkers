@@ -12,6 +12,9 @@ import {
   removeCategoryFromProducts,
   pruneRemovedCategories,
   formatCategoryLabel,
+  getProductVariantImage,
+  getProductGallery,
+  countProductVariantPhotos,
 } from '../src/utils/productUtils';
 import { Product } from '../src/types';
 
@@ -292,6 +295,78 @@ describe('productUtils', () => {
       expect(filterProducts(catalog, 'animals', '').map((p) => p.id)).toEqual(['hybrid-1', 'weeble-2']);
       expect(filterProducts(catalog, 'sweets', '').map((p) => p.id)).toEqual(['hybrid-1']);
       expect(filterProducts(catalog, 'fantasy', '')).toEqual([]);
+    });
+  });
+
+  describe('variant image & gallery helpers', () => {
+    const productWithVariantPhotos: Product = {
+      ...mockProducts[0],
+      images: ['/images/products/bunny-base.jpg'],
+      availableVariants: ['magnet', 'keychain'],
+      variantImages: {
+        magnet: '/images/products/bunny-magnet.jpg',
+        keychain: '/images/products/bunny-keychain.jpg',
+      },
+    };
+
+    it('getProductVariantImage returns variant image when present and falls back to base image', () => {
+      expect(getProductVariantImage(productWithVariantPhotos, 'magnet')).toBe(
+        '/images/products/bunny-magnet.jpg'
+      );
+      expect(getProductVariantImage(productWithVariantPhotos, 'keychain')).toBe(
+        '/images/products/bunny-keychain.jpg'
+      );
+      expect(getProductVariantImage(productWithVariantPhotos)).toBe(
+        '/images/products/bunny-base.jpg'
+      );
+
+      const blankVariantProduct: Product = {
+        ...productWithVariantPhotos,
+        variantImages: { magnet: '   ' },
+      };
+      expect(getProductVariantImage(blankVariantProduct, 'magnet')).toBe(
+        '/images/products/bunny-base.jpg'
+      );
+      expect(getProductVariantImage(blankVariantProduct, 'keychain')).toBe(
+        '/images/products/bunny-base.jpg'
+      );
+    });
+
+    it('getProductGallery returns base slide followed by enabled variant slides in availableVariants order', () => {
+      expect(getProductGallery(productWithVariantPhotos)).toEqual([
+        { src: '/images/products/bunny-base.jpg', label: 'Base' },
+        { src: '/images/products/bunny-magnet.jpg', label: 'Magnet', variant: 'magnet' },
+        { src: '/images/products/bunny-keychain.jpg', label: 'Keychain', variant: 'keychain' },
+      ]);
+    });
+
+    it('getProductGallery returns only base slide when no variant photos exist and ignores disabled variants or blank entries', () => {
+      expect(getProductGallery(mockProducts[0])).toEqual([
+        { src: '/images/products/strawberry-bunny.jpg', label: 'Base' },
+      ]);
+
+      const magnetOnlyWithStaleKeychain: Product = {
+        ...productWithVariantPhotos,
+        availableVariants: ['magnet'],
+        variantImages: {
+          magnet: '  ',
+          keychain: '/images/products/bunny-keychain.jpg',
+        },
+      };
+      expect(getProductGallery(magnetOnlyWithStaleKeychain)).toEqual([
+        { src: '/images/products/bunny-base.jpg', label: 'Base' },
+      ]);
+    });
+
+    it('countProductVariantPhotos counts only enabled variants with non-empty photos', () => {
+      expect(countProductVariantPhotos(mockProducts[0])).toBe(0);
+      expect(countProductVariantPhotos(productWithVariantPhotos)).toBe(2);
+      expect(
+        countProductVariantPhotos({
+          ...productWithVariantPhotos,
+          availableVariants: ['magnet'],
+        })
+      ).toBe(1);
     });
   });
 });

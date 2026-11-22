@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Product, VariantType } from '../types';
 import { useCart } from '../context/CartContext';
-import { formatPrice, getProductVariantPrice, isNewProduct } from '../utils/productUtils';
-import { Sparkles, Check } from 'lucide-react';
+import { formatPrice, getProductGallery, getProductVariantPrice, isNewProduct } from '../utils/productUtils';
+import { Sparkles, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
@@ -14,6 +14,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     product.availableVariants[0]
   );
   const [justAdded, setJustAdded] = useState(false);
+  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+
+  const gallery = getProductGallery(product);
+  const hasMultiplePhotos = gallery.length > 1;
 
   useEffect(() => {
     if (product.availableVariants.length === 0) {
@@ -23,11 +27,38 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     }
   }, [product.availableVariants, selectedVariant]);
 
+  useEffect(() => {
+    if (activeSlideIndex >= gallery.length) {
+      setActiveSlideIndex(0);
+    }
+  }, [gallery.length, activeSlideIndex]);
+
+  const activeSlide = gallery[activeSlideIndex] || gallery[0] || {
+    src: product.images[0] || '',
+    label: 'Base',
+  };
+
   const compositeId = `${product.id}-${selectedVariant || 'standard'}`;
   const currentItem = items.find((item) => item.id === compositeId);
   const maxAllowed = product.isOneOfAKind ? 1 : (product.stockCount || 10);
   const isMaxReached = currentItem ? currentItem.quantity >= maxAllowed : false;
   const activePrice = getProductVariantPrice(product, selectedVariant);
+
+  const handleSelectVariant = (variant: VariantType) => {
+    setSelectedVariant(variant);
+    if (hasMultiplePhotos) {
+      const idx = gallery.findIndex((slide) => slide.variant === variant);
+      setActiveSlideIndex(idx !== -1 ? idx : 0);
+    }
+  };
+
+  const handlePrevPhoto = () => {
+    setActiveSlideIndex((prev) => (prev - 1 + gallery.length) % gallery.length);
+  };
+
+  const handleNextPhoto = () => {
+    setActiveSlideIndex((prev) => (prev + 1) % gallery.length);
+  };
 
   const handleAddToCart = () => {
     if (!product.inStock || isMaxReached) return;
@@ -41,8 +72,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       {/* Image Container with Badges */}
       <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-weeble-pinkBg mb-3.5">
         <img
-          src={product.images[0]}
-          alt={product.name}
+          src={activeSlide.src}
+          alt={hasMultiplePhotos ? `${product.name} - ${activeSlide.label}` : product.name}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           loading="lazy"
         />
@@ -78,6 +109,58 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </span>
           </div>
         )}
+
+        {/* Carousel Controls (only shown when > 1 photo exists) */}
+        {hasMultiplePhotos && (
+          <>
+            <button
+              type="button"
+              onClick={handlePrevPhoto}
+              aria-label="Previous photo"
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/85 hover:bg-white text-weeble-text shadow-sm flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleNextPhoto}
+              aria-label="Next photo"
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/85 hover:bg-white text-weeble-text shadow-sm flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+
+            {/* Active Photo Label Pill */}
+            <div className="absolute bottom-2 left-2">
+              <span className="bg-white/90 text-weeble-text text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                {activeSlide.variant === 'magnet'
+                  ? '🧲 Magnet'
+                  : activeSlide.variant === 'keychain'
+                  ? '🔑 Keychain'
+                  : 'Base'}
+              </span>
+            </div>
+
+            {/* Dot Indicators */}
+            <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1">
+              {gallery.map((slide, idx) => {
+                const isActive = idx === activeSlideIndex;
+                return (
+                  <button
+                    key={`${slide.label}-${idx}`}
+                    type="button"
+                    onClick={() => setActiveSlideIndex(idx)}
+                    aria-label={`View ${slide.label} photo`}
+                    aria-current={isActive ? 'true' : undefined}
+                    className={`h-2 rounded-full transition-all shadow-xs cursor-pointer ${
+                      isActive ? 'w-4 bg-weeble-pink' : 'w-2 bg-white/80 hover:bg-white'
+                    }`}
+                  />
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Info Section */}
@@ -108,7 +191,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
                   <button
                     key={variant}
                     type="button"
-                    onClick={() => setSelectedVariant(variant)}
+                    onClick={() => handleSelectVariant(variant)}
                     aria-label={variant}
                     className={`text-xs font-bold py-1.5 px-2 rounded-xl transition-all border flex items-center justify-center gap-1 ${
                       isSelected
