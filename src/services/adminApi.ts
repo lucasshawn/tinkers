@@ -1,6 +1,7 @@
 import { Product, ChangeLogEntry, UploadedImage } from '../types';
 import { CategoryOption, SiteSettings } from '../types/settings';
 import { adminAuth } from './adminAuth';
+import { cacheContentImagePreview } from '../utils/contentImageCache';
 
 export const adminApi = {
   async loadStoreData(): Promise<{
@@ -162,5 +163,39 @@ export const adminApi = {
     }
 
     return res.json();
+  },
+
+  async uploadContentImage(
+    filename: string,
+    base64Data: string
+  ): Promise<{ success: boolean; url: string; filename: string; message: string }> {
+    const session = adminAuth.getSession();
+    if (!session) throw new Error('Not authenticated');
+
+    const res = await fetch('/.netlify/functions/admin-save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({
+        type: 'content-image',
+        contentImage: { filename, base64Data },
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const err = new Error(data.error || 'Failed to upload image') as any;
+      err.status = res.status;
+      err.endpoint = 'POST /.netlify/functions/admin-save (type=content-image)';
+      throw err;
+    }
+
+    const result = await res.json();
+    if (result?.url && base64Data.startsWith('data:image/')) {
+      cacheContentImagePreview(result.url, base64Data);
+    }
+    return result;
   },
 };

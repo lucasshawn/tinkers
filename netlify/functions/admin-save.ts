@@ -1,4 +1,4 @@
-import { Handler } from '@netlify/functions';
+import { Handler, HandlerResponse } from '@netlify/functions';
 import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
@@ -16,6 +16,16 @@ const TMP_SETTINGS_FILE = 'weebles-settings.json';
 const TMP_CHANGES_FILE = 'weebles-changes.json';
 const BLOB_STORE_NAME = 'site:weebles-store';
 const CHANGE_LOG_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const MAX_CONTENT_IMAGE_BYTES = 2 * 1024 * 1024;
+const CONTENT_IMAGE_MIME_BY_EXT: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+};
+const SAFE_CONTENT_IMAGE_NAME_RE = /^[a-zA-Z0-9._-]+\.(png|jpe?g|webp|gif)$/i;
+const SAFE_DATA_IMAGE_PREFIX_RE = /^data:image\/(png|jpe?g|webp|gif);base64,/i;
 
 function filterRecentChanges(entries: any[], now: number = Date.now()): any[] {
   const cutoff = now - CHANGE_LOG_RETENTION_MS;
@@ -279,7 +289,7 @@ async function commitToGitHub(filePath: string, contentBase64: string, commitMes
   return putRes.json();
 }
 
-export const handler: Handler = async (event) => {
+export const handler: Handler = async (event): Promise<HandlerResponse> => {
   if (event.httpMethod === 'GET' && event.queryStringParameters?.action === 'load') {
     const products = await loadPersistedProducts(event);
     const settings = await loadPersistedSettings(event);
@@ -290,6 +300,62 @@ export const handler: Handler = async (event) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ products, settings, changes }),
+    };
+  }
+
+  if (event.httpMethod === 'GET' && event.queryStringParameters?.action === 'content-image') {
+    const name = event.queryStringParameters?.name || '';
+    if (!SAFE_CONTENT_IMAGE_NAME_RE.test(name) || name.includes('..') || path.basename(name) !== name) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Invalid image filename' }),
+      };
+    }
+    const ext = path.extname(name).toLowerCase();
+    const contentType = CONTENT_IMAGE_MIME_BY_EXT[ext] || 'application/octet-stream';
+
+    const blobImg = await readFromNetlifyBlobs<{ contentType?: string; base64?: string }>(
+      event,
+      `content-image:${name}`
+    );
+    if (blobImg?.base64) {
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': blobImg.contentType || contentType,
+          'Cache-Control': 'public, max-age=3600',
+        },
+        body: blobImg.base64,
+        isBase64Encoded: true,
+      };
+    }
+
+    const candidates = [
+      path.resolve(process.cwd(), 'public/images/content', name),
+      path.join(os.tmpdir(), `weebles-content-img-${name}`),
+    ];
+    for (const candidate of candidates) {
+      try {
+        if (fs.existsSync(candidate)) {
+          const buf = fs.readFileSync(candidate);
+          return {
+            statusCode: 200,
+            headers: {
+              'Content-Type': contentType,
+              'Cache-Control': 'public, max-age=3600',
+            },
+            body: buf.toString('base64'),
+            isBase64Encoded: true,
+          };
+        }
+      } catch {}
+    }
+
+    return {
+      statusCode: 404,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Image not found' }),
     };
   }
 
@@ -312,7 +378,7 @@ export const handler: Handler = async (event) => {
       event.isBase64Encoded && event.body
         ? Buffer.from(event.body, 'base64').toString('utf-8')
         : event.body || '{}';
-    const { type, products, settings, admins, categories, newImage, newImages, changes } = JSON.parse(rawBody);
+    const { type, products, settings, admins, categories, newImage, newImages, changes, contentImage } = JSON.parse(rawBody);
     const githubToken = process.env.GITHUB_TOKEN || '';
 
     // 1. Handle image upload(s) if present (supports newImages[] and legacy single newImage)
@@ -372,14 +438,21 @@ export const handler: Handler = async (event) => {
     // 3. Handle settings update
     if (type === 'settings' && settings) {
       const mergedSettings = { ...settings };
-      // Preserve existing admins and categories when not explicitly provided in settings update
-      if (!mergedSettings.admins || mergedSettings.categories === undefined) {
+      // Preserve existing admins, categories, and pageContent when not explicitly provided in settings update
+      if (
+        !mergedSettings.admins ||
+        mergedSettings.categories === undefined ||
+        mergedSettings.pageContent === undefined
+      ) {
         const currentSettings = await loadPersistedSettings(event);
         if (!mergedSettings.admins && currentSettings.admins) {
           mergedSettings.admins = currentSettings.admins;
         }
         if (mergedSettings.categories === undefined && currentSettings.categories !== undefined) {
           mergedSettings.categories = currentSettings.categories;
+        }
+        if (mergedSettings.pageContent === undefined && currentSettings.pageContent !== undefined) {
+          mergedSettings.pageContent = currentSettings.pageContent;
         }
       }
 
@@ -532,6 +605,106 @@ export const handler: Handler = async (event) => {
           message: githubToken
             ? 'Categories saved and committed to GitHub. Netlify deploy triggered!'
             : 'Categories saved locally (Dev Mode).',
+        }),
+      };
+    }
+
+    // 7. Handle inline content PNG/image upload
+    if (type === 'content-image') {
+      if (!contentImage?.filename || !contentImage?.base64Data) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Missing content image filename or data.' }),
+        };
+      }
+
+      const rawDataStr = String(contentImage.base64Data).trim();
+      if (rawDataStr.startsWith('data:') && !SAFE_DATA_IMAGE_PREFIX_RE.test(rawDataStr)) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Unsupported image MIME type. Please upload a PNG, JPG, WEBP, or GIF file.',
+          }),
+        };
+      }
+
+      const sanitized = path
+        .basename(String(contentImage.filename))
+        .replace(/[^a-zA-Z0-9._-]/g, '');
+      const ext = path.extname(sanitized).toLowerCase();
+      const contentType = CONTENT_IMAGE_MIME_BY_EXT[ext];
+      if (!contentType || !SAFE_CONTENT_IMAGE_NAME_RE.test(sanitized)) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Unsupported image format. Please upload a PNG, JPG, WEBP, or GIF file.',
+          }),
+        };
+      }
+
+      const rawBase64 = rawDataStr.replace(SAFE_DATA_IMAGE_PREFIX_RE, '');
+      const buffer = Buffer.from(rawBase64, 'base64');
+      if (buffer.length === 0) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Image file is empty.' }),
+        };
+      }
+      if (buffer.length > MAX_CONTENT_IMAGE_BYTES) {
+        return {
+          statusCode: 413,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Image exceeds 2 MB limit. Please use a smaller PNG.' }),
+        };
+      }
+
+      const stem =
+        sanitized
+          .slice(0, sanitized.length - ext.length)
+          .replace(/\.+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 48) || 'image';
+      const cleanFilename = `${stem}-${Date.now()}${ext}`;
+      const imagePath = `public/images/content/${cleanFilename}`;
+
+      await saveToNetlifyBlobs(
+        event,
+        `content-image:${cleanFilename}`,
+        JSON.stringify({ contentType, base64: rawBase64 })
+      );
+
+      if (githubToken) {
+        await commitToGitHub(
+          imagePath,
+          rawBase64,
+          `chore(admin): upload storefront content image ${cleanFilename}`
+        );
+      } else {
+        const localDir = path.resolve(process.cwd(), 'public/images/content');
+        try {
+          if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
+          fs.writeFileSync(path.join(localDir, cleanFilename), buffer);
+        } catch {
+          try {
+            fs.writeFileSync(path.join(os.tmpdir(), `weebles-content-img-${cleanFilename}`), buffer);
+          } catch {}
+        }
+      }
+
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          success: true,
+          url: `/images/content/${cleanFilename}`,
+          filename: cleanFilename,
+          message: githubToken
+            ? 'Image uploaded and committed to GitHub!'
+            : 'Image uploaded locally (Dev Mode).',
         }),
       };
     }

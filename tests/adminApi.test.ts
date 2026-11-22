@@ -968,6 +968,239 @@ describe('admin-save Netlify Function', () => {
     expect(writtenProducts[1].categories).toEqual([]);
     expect(writtenProducts[1]).not.toHaveProperty('category');
   });
+
+  it('preserves existing pageContent when saving settings without a pageContent property', async () => {
+    const existingSettings = {
+      contactEmail: 'old@weebles.com',
+      customOrderEmail: 'old@weebles.com',
+      socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+      admins: ['lucasshawn@gmail.com'],
+      categories: [{ id: 'animals', label: 'Critters', emoji: '🐰' }],
+      pageContent: {
+        heroTagline: 'Custom Tagline',
+        heroTitle: 'Custom Title',
+        heroSubtitle: 'Custom Subtitle',
+        socialBadge: 'Follow',
+        socialTitle: 'Social Title',
+        socialSubtitle: 'Social Subtitle',
+        catalogTitle: 'Catalog Title',
+        catalogSubtitle: 'Catalog Subtitle',
+        footerCareTitle: 'Clay Care',
+        footerCareBody: 'Custom care instructions',
+      },
+    };
+    vi.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify(existingSettings));
+
+    const event = {
+      httpMethod: 'POST',
+      headers: { authorization: `Bearer ${validToken}` },
+      body: JSON.stringify({
+        type: 'settings',
+        settings: {
+          contactEmail: 'new@weebles.com',
+          customOrderEmail: 'new@weebles.com',
+          socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+        },
+      }),
+    };
+
+    const res = (await handler(event as any, {} as any)) as any;
+    expect(res.statusCode).toBe(200);
+
+    const writeCalls = (fs.writeFileSync as any).mock.calls;
+    const settingsCall = writeCalls.find((c: any[]) => String(c[0]).includes('settings.json'));
+    expect(settingsCall).toBeDefined();
+    expect(JSON.parse(settingsCall[1]).pageContent).toEqual(existingSettings.pageContent);
+  });
+
+  it('uploads valid PNG via type=content-image (dev mode and GitHub) and rejects SVG, empty, or >2MB payloads', async () => {
+    const tinyPngBase64 =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+    const svgRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: { filename: 'bad.svg', base64Data: 'data:image/svg+xml;base64,PHN2Zz4=' },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(svgRes.statusCode).toBe(400);
+
+    const spoofedMimeRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: { filename: 'spoof.png', base64Data: 'data:image/svg+xml;base64,PHN2Zz4=' },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(spoofedMimeRes.statusCode).toBe(400);
+
+    const emptyRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: { filename: 'empty.png', base64Data: 'data:image/png;base64,' },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(emptyRes.statusCode).toBe(400);
+
+    const bigBase64 = 'A'.repeat(3 * 1024 * 1024);
+    const bigRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: { filename: 'huge.png', base64Data: `data:image/png;base64,${bigBase64}` },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(bigRes.statusCode).toBe(413);
+
+    // Dev mode save
+    const okRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: { filename: 'tiny-star.png', base64Data: tinyPngBase64 },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(okRes.statusCode).toBe(200);
+    const parsed = JSON.parse(okRes.body);
+    expect(parsed.success).toBe(true);
+    expect(parsed.url).toMatch(/^\/images\/content\/tiny-star-\d+\.png$/);
+    expect(parsed.filename).toMatch(/^tiny-star-\d+\.png$/);
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      expect.stringContaining(parsed.filename),
+      expect.any(Buffer)
+    );
+
+    // GitHub commit mode
+    process.env.GITHUB_TOKEN = 'ghp_test_token_123';
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ commit: { sha: 'content-img-sha' } }) });
+    globalThis.fetch = mockFetch;
+
+    const ghRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { authorization: `Bearer ${validToken}` },
+        body: JSON.stringify({
+          type: 'content-image',
+          contentImage: { filename: 'cloud.png', base64Data: tinyPngBase64 },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(ghRes.statusCode).toBe(200);
+    const ghParsed = JSON.parse(ghRes.body);
+    expect(ghParsed.success).toBe(true);
+    expect(ghParsed.url).toMatch(/^\/images\/content\/cloud-\d+\.png$/);
+    expect(ghParsed.message).toMatch(/committed to github/i);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('public/images/content/cloud-'),
+      expect.objectContaining({ method: 'PUT' })
+    );
+  });
+
+  it('serves stored content images and rejects invalid or traversal filenames on GET ?action=content-image', async () => {
+    const traversalRes = (await handler(
+      {
+        httpMethod: 'GET',
+        queryStringParameters: { action: 'content-image', name: '../secret.png' },
+        headers: {},
+      } as any,
+      {} as any
+    )) as any;
+    expect(traversalRes?.statusCode).toBe(400);
+
+    const svgRes = (await handler(
+      {
+        httpMethod: 'GET',
+        queryStringParameters: { action: 'content-image', name: 'evil.svg' },
+        headers: {},
+      } as any,
+      {} as any
+    )) as any;
+    expect(svgRes?.statusCode).toBe(400);
+
+    // Serve from Netlify Blobs
+    const rawB64 =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ contentType: 'image/png', base64: rawB64 }),
+    });
+    const blobsPayload = Buffer.from(
+      JSON.stringify({ url: 'https://edge.netlify.com', token: 'netlify-blobs-token-xyz' })
+    ).toString('base64');
+
+    const blobRes = (await handler(
+      {
+        httpMethod: 'GET',
+        queryStringParameters: { action: 'content-image', name: 'star-123.png' },
+        headers: { 'x-nf-site-id': 'site-12345' },
+        blobs: blobsPayload,
+      } as any,
+      {} as any
+    )) as any;
+    expect(blobRes.statusCode).toBe(200);
+    expect(blobRes.headers['Content-Type']).toBe('image/png');
+    expect(blobRes.headers['Cache-Control']).toContain('max-age=');
+    expect(blobRes.isBase64Encoded).toBe(true);
+    expect(blobRes.body).toBe(rawB64);
+
+    // Serve from local filesystem fallback
+    const imgBytes = Buffer.from(rawB64, 'base64');
+    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+    vi.spyOn(fs, 'readFileSync').mockReturnValue(imgBytes as any);
+
+    const fsRes = (await handler(
+      {
+        httpMethod: 'GET',
+        queryStringParameters: { action: 'content-image', name: 'local-star.png' },
+        headers: {},
+      } as any,
+      {} as any
+    )) as any;
+    expect(fsRes.statusCode).toBe(200);
+    expect(fsRes.headers['Content-Type']).toBe('image/png');
+    expect(fsRes.isBase64Encoded).toBe(true);
+    expect(fsRes.body).toBe(rawB64);
+
+    // Returns 404 when not found
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    const missingRes = (await handler(
+      {
+        httpMethod: 'GET',
+        queryStringParameters: { action: 'content-image', name: 'missing.png' },
+        headers: {},
+      } as any,
+      {} as any
+    )) as any;
+    expect(missingRes.statusCode).toBe(404);
+  });
 });
 
 describe('adminApi client service', () => {
@@ -1266,5 +1499,72 @@ describe('adminApi client service', () => {
     expect(caughtError.message).toBe('Category sync failed');
     expect(caughtError.status).toBe(500);
     expect(caughtError.endpoint).toBe('POST /.netlify/functions/admin-save (type=categories)');
+  });
+
+  it('uploadContentImage throws error when not authenticated', async () => {
+    await expect(
+      adminApi.uploadContentImage('star.png', 'data:image/png;base64,iVBORw0KGgo=')
+    ).rejects.toThrow(/not authenticated/i);
+  });
+
+  it('uploadContentImage posts content-image payload and caches local preview', async () => {
+    adminAuth.setSession({
+      email: 'lucasshawn@gmail.com',
+      token: 'tok-123',
+      exp: Date.now() + 60000,
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          url: '/images/content/star.png',
+          filename: 'star.png',
+          message: 'Image uploaded!',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    const res = await adminApi.uploadContentImage('star.png', 'data:image/png;base64,iVBORw0KGgo=');
+    expect(res.url).toBe('/images/content/star.png');
+    expect(res.filename).toBe('star.png');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/.netlify/functions/admin-save',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer tok-123',
+        },
+        body: expect.stringContaining('"type":"content-image"'),
+      })
+    );
+    expect(localStorage.getItem('weebles_content_images_v1')).toContain('/images/content/star.png');
+  });
+
+  it('uploadContentImage throws enriched error with status and endpoint when API returns failure status', async () => {
+    adminAuth.setSession({
+      email: 'lucasshawn@gmail.com',
+      token: 'tok-123',
+      exp: Date.now() + 60000,
+    });
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 413,
+      json: async () => ({ error: 'Image exceeds 2 MB limit.' }),
+    });
+
+    let caughtError: any;
+    try {
+      await adminApi.uploadContentImage('huge.png', 'data:image/png;base64,AAAA');
+    } catch (err) {
+      caughtError = err;
+    }
+
+    expect(caughtError).toBeInstanceOf(Error);
+    expect(caughtError.message).toBe('Image exceeds 2 MB limit.');
+    expect(caughtError.status).toBe(413);
+    expect(caughtError.endpoint).toBe('POST /.netlify/functions/admin-save (type=content-image)');
   });
 });
