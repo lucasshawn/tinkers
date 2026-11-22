@@ -1,12 +1,71 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Save, CheckCircle2, Mail, Sparkles, Megaphone } from 'lucide-react';
-import { SiteSettings, SocialLink } from '../../types/settings';
+import {
+  Save,
+  CheckCircle2,
+  Mail,
+  Sparkles,
+  Megaphone,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
+import { PageContentSettings, SiteSettings, SocialLink } from '../../types/settings';
+import {
+  DEFAULT_PAGE_CONTENT,
+  PAGE_CONTENT_LABELS,
+  resolvePageContent,
+} from '../../utils/pageContentDefaults';
+import { adminApi } from '../../services/adminApi';
 import {
   isSafeHttpUrl,
   normalizeSocialLinks,
   syncLegacySocials,
 } from '../../utils/socialPlatforms';
 import { SocialLinksEditor } from './SocialLinksEditor';
+import { MarkdownFieldEditor, MarkdownFieldEditorProps } from './MarkdownFieldEditor';
+
+interface PageContentFieldConfig {
+  key: keyof PageContentSettings;
+  mode?: MarkdownFieldEditorProps['mode'];
+  rows?: number;
+  previewVariant: NonNullable<MarkdownFieldEditorProps['previewVariant']>;
+}
+
+const PAGE_CONTENT_SECTIONS: Array<{
+  title: string;
+  fields: PageContentFieldConfig[];
+}> = [
+  {
+    title: 'Hero Section',
+    fields: [
+      { key: 'heroTagline', previewVariant: 'pill', rows: 1 },
+      { key: 'heroTitle', previewVariant: 'heroTitle', rows: 2 },
+      { key: 'heroSubtitle', previewVariant: 'subtitle', rows: 3 },
+    ],
+  },
+  {
+    title: 'Behind the Scenes & Restocks',
+    fields: [
+      { key: 'socialBadge', previewVariant: 'pill', rows: 1 },
+      { key: 'socialTitle', previewVariant: 'heading', rows: 2 },
+      { key: 'socialSubtitle', previewVariant: 'subtitle', rows: 2 },
+    ],
+  },
+  {
+    title: 'Catalog Header',
+    fields: [
+      { key: 'catalogTitle', previewVariant: 'heading', rows: 1 },
+      { key: 'catalogSubtitle', previewVariant: 'subtitle', rows: 2 },
+    ],
+  },
+  {
+    title: 'Footer Clay Care',
+    fields: [
+      { key: 'footerCareTitle', previewVariant: 'heading', rows: 1 },
+      { key: 'footerCareBody', mode: 'block', previewVariant: 'careList', rows: 4 },
+    ],
+  },
+];
 
 export interface ContentTabProps {
   settings: SiteSettings;
@@ -16,6 +75,10 @@ export interface ContentTabProps {
 export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
   const [bannerEnabled, setBannerEnabled] = useState(settings.announcementBanner?.enabled ?? false);
   const [bannerText, setBannerText] = useState(settings.announcementBanner?.text ?? '');
+  const [pageContent, setPageContent] = useState<PageContentSettings>(() =>
+    resolvePageContent(settings.pageContent)
+  );
+  const [showGuide, setShowGuide] = useState(false);
   const [contactEmail, setContactEmail] = useState(settings.contactEmail);
   const [customOrderEmail, setCustomOrderEmail] = useState(settings.customOrderEmail);
   const [socialLinksEnabled, setSocialLinksEnabled] = useState(
@@ -33,11 +96,29 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
     if (hasEditedRef.current) return;
     setBannerEnabled(settings.announcementBanner?.enabled ?? false);
     setBannerText(settings.announcementBanner?.text ?? '');
+    setPageContent(resolvePageContent(settings.pageContent));
     setContactEmail(settings.contactEmail);
     setCustomOrderEmail(settings.customOrderEmail);
     setSocialLinksEnabled(settings.socialLinksEnabled ?? true);
     setSocialLinks(normalizeSocialLinks(settings));
   }, [settings]);
+
+  const updatePageField = (key: keyof PageContentSettings, nextValue: string) => {
+    hasEditedRef.current = true;
+    setPageContent((prev) => ({ ...prev, [key]: nextValue }));
+  };
+
+  const handleUploadInlinePng = async (file: File): Promise<{ url: string; alt: string }> => {
+    const base64Data = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Failed to read image file'));
+      reader.readAsDataURL(file);
+    });
+    const res = await adminApi.uploadContentImage(file.name, base64Data);
+    const alt = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim() || 'icon';
+    return { url: res.url, alt };
+  };
 
   const handleLinksChange = (nextLinks: SocialLink[]) => {
     hasEditedRef.current = true;
@@ -94,6 +175,7 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
           enabled: bannerEnabled,
           text: bannerText,
         },
+        pageContent,
       });
       hasEditedRef.current = false;
       setSavedSuccess(true);
@@ -171,6 +253,74 @@ export const ContentTab: React.FC<ContentTabProps> = ({ settings, onSave }) => {
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Storefront Page Copy (Markdown) */}
+      <div className="bg-white rounded-3xl border-2 border-pink-200 p-6 shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-pink-100 flex items-center justify-center text-weeble-pink shrink-0">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bubble text-lg font-bold text-weeble-text">
+                Storefront Page Copy (Markdown)
+              </h3>
+              <p className="text-xs text-weeble-textMuted">
+                Customize homepage & footer copy with Markdown, colors, fonts, and inline PNG icons.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            aria-expanded={showGuide}
+            onClick={() => setShowGuide((prev) => !prev)}
+            className="self-start sm:self-auto px-3 py-1.5 rounded-full text-xs font-bold text-weeble-pink bg-pink-50 border border-pink-200 hover:border-weeble-pink flex items-center gap-1 cursor-pointer"
+          >
+            <span>Formatting Guide</span>
+            {showGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+
+        {showGuide && (
+          <div className="bg-weeble-pinkWash border border-pink-200 rounded-2xl p-4 text-xs text-weeble-text space-y-1.5">
+            <div className="font-bold text-weeble-text">Supported Markdown & Styling Syntax</div>
+            <ul className="space-y-1 font-mono text-[11px] text-weeble-textMuted">
+              <li>**bold** &nbsp;•&nbsp; *italic* &nbsp;•&nbsp; ~~strikethrough~~</li>
+              <li>[text]&#123;color=pink font=bubble wavy&#125;</li>
+              <li>&lt;span style=&quot;color:#FF85A1&quot;&gt;text&lt;/span&gt;</li>
+              <li>![alt](/images/content/icon.png =28)</li>
+              <li>- bullet item (for list blocks like Clay Care)</li>
+            </ul>
+          </div>
+        )}
+
+        <div className="space-y-6">
+          {PAGE_CONTENT_SECTIONS.map((section) => (
+            <div key={section.title} className="space-y-4 pt-4 border-t border-pink-100 first:pt-0 first:border-t-0">
+              <h4 className="font-bubble text-sm font-bold text-weeble-pink uppercase tracking-wide">
+                {section.title}
+              </h4>
+              <div className="space-y-4">
+                {section.fields.map((field) => (
+                  <MarkdownFieldEditor
+                    key={field.key}
+                    id={`pageContent-${field.key}`}
+                    label={PAGE_CONTENT_LABELS[field.key]}
+                    value={pageContent[field.key]}
+                    defaultValue={DEFAULT_PAGE_CONTENT[field.key]}
+                    mode={field.mode}
+                    rows={field.rows}
+                    previewVariant={field.previewVariant}
+                    onChange={(nextValue) => updatePageField(field.key, nextValue)}
+                    onUploadImage={handleUploadInlinePng}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

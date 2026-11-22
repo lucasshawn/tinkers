@@ -267,4 +267,37 @@ describe('ContentTab', () => {
     expect(screen.getByRole('checkbox', { name: /Show Social Media Links on Storefront/i })).not.toBeChecked();
     expect(screen.getByDisplayValue('https://x.com/hydrated_clay')).toBeInTheDocument();
   });
+
+  it('renders Markdown page copy fields and saves updated pageContent alongside existing settings', async () => {
+    const handleSave = vi.fn().mockResolvedValue(undefined);
+    render(<ContentTab settings={mockSettings} onSave={handleSave} />);
+
+    const heroTitleInput = screen.getByLabelText(/^Hero Title$/i);
+    expect(heroTitleInput).toHaveValue(
+      'Tiny Polymer Clay Friends for Your [Fridge & Keys]{color=pink wavy} ✨'
+    );
+
+    fireEvent.change(heroTitleInput, {
+      target: { value: 'Tiny **Handcrafted** Friends ✨' },
+    });
+
+    const catalogSubtitleInput = screen.getByLabelText(/^Catalog Subtitle$/i);
+    fireEvent.change(catalogSubtitleInput, {
+      target: { value: 'Baked with *love*.' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Save & Publish Site Content/i }));
+
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pageContent: expect.objectContaining({
+            heroTitle: 'Tiny **Handcrafted** Friends ✨',
+            catalogSubtitle: 'Baked with *love*.',
+            heroTagline: 'Hand-Sculpted Polymer Clay with Love',
+          }),
+        })
+      );
+    });
+  });
 });
