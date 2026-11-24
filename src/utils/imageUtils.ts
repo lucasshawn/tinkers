@@ -1,4 +1,27 @@
+import type { SyntheticEvent } from 'react';
 import { UploadedImage } from '../types';
+
+const PRODUCT_IMAGE_PREFIX = '/images/products/';
+const SAFE_PRODUCT_IMAGE_FILENAME_RE = /^[a-zA-Z0-9._-]+\.(png|jpe?g|webp|gif)$/i;
+
+export function getProductImageFallbackUrl(src?: string | null): string | null {
+  if (!src || !src.startsWith(PRODUCT_IMAGE_PREFIX)) return null;
+  const filename = src.slice(PRODUCT_IMAGE_PREFIX.length);
+  if (!SAFE_PRODUCT_IMAGE_FILENAME_RE.test(filename)) return null;
+  return `/.netlify/functions/admin-save?action=product-image&name=${encodeURIComponent(filename)}`;
+}
+
+export function handleProductImageError(
+  event: SyntheticEvent<HTMLImageElement>,
+  originalSrc?: string | null
+): void {
+  const target = event.currentTarget;
+  const fallbackUrl = getProductImageFallbackUrl(originalSrc);
+  if (!fallbackUrl) return;
+  if (target.dataset.fallbackFor === originalSrc) return;
+  target.dataset.fallbackFor = originalSrc || '';
+  target.src = fallbackUrl;
+}
 
 export function sanitizeImageFilename(rawFilename: string, prefix?: string): string {
   const baseName = rawFilename.split(/[/\\]/).pop() || rawFilename;

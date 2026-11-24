@@ -15,7 +15,8 @@ import { AdminPortal } from './components/admin/AdminPortal';
 import { AnnouncementBanner } from './components/AnnouncementBanner';
 import productsData from './data/products.json';
 import { Product } from './types';
-import { getStoredProducts, saveStoredProducts, PRODUCTS_STORAGE_KEY } from './utils/productUtils';
+import { getStoredProducts, saveStoredProducts } from './utils/productUtils';
+import { removeExpiringStorageItem } from './utils/cacheUtils';
 import { adminApi } from './services/adminApi';
 
 export const AppContent: React.FC = () => {
@@ -34,19 +35,25 @@ export const AppContent: React.FC = () => {
 
   useEffect(() => {
     if (import.meta.env.MODE === 'test') return;
-    const hasStoredProducts = Boolean(localStorage.getItem(PRODUCTS_STORAGE_KEY));
-    const hasStoredSettings = Boolean(localStorage.getItem(SETTINGS_STORAGE_KEY));
-    if (hasStoredProducts && hasStoredSettings) return;
+    let cancelled = false;
 
+    // Stale-while-revalidate: render cached localStorage immediately on initial paint,
+    // but always fetch the live catalog and settings so newly added items appear on every browser.
     adminApi.loadStoreData().then((data) => {
-      if (!hasStoredProducts && data?.products && Array.isArray(data.products)) {
+      if (cancelled || !data) return;
+      if (data.products && Array.isArray(data.products)) {
         setProducts(data.products);
         saveStoredProducts(data.products);
       }
-      if (!hasStoredSettings && data?.settings && typeof data.settings === 'object') {
+      if (data.settings && typeof data.settings === 'object') {
+        removeExpiringStorageItem(SETTINGS_STORAGE_KEY);
         hydrateSettings(data.settings);
       }
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [hydrateSettings]);
 
   // Check if viewing order success

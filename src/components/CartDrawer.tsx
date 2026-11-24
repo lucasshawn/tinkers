@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Trash2, Plus, Minus, Lock } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { formatPrice } from '../utils/productUtils';
+import { handleProductImageError } from '../utils/imageUtils';
 
 export interface CartDrawerProps {
   onCheckout: (giftNote: string) => void;
@@ -93,6 +94,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onCheckout, isLoadingChe
                     src={item.image}
                     alt={item.name}
                     className="w-16 h-16 rounded-xl object-cover border border-pink-200 bg-white"
+                    onError={(e) => handleProductImageError(e, item.image)}
                   />
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bubble text-sm font-bold text-weeble-text truncate">
@@ -145,7 +147,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onCheckout, isLoadingChe
 
           {/* Footer & Checkout */}
           {items.length > 0 && (
-            <div className="p-5 border-t border-pink-100 bg-white space-y-4">
+            <div
+              data-testid="cart-footer"
+              className="px-5 pt-5 pb-[calc(6rem_+_env(safe-area-inset-bottom))] border-t border-pink-100 bg-white space-y-4"
+            >
               {/* Optional Gift Note */}
               <div>
                 <label className="block text-xs font-bold text-weeble-textMuted mb-1">

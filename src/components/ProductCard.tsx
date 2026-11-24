@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Product, VariantType } from '../types';
 import { useCart } from '../context/CartContext';
 import { formatPrice, getProductGallery, getProductVariantPrice, isNewProduct } from '../utils/productUtils';
+import { handleProductImageError } from '../utils/imageUtils';
 import { Sparkles, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface ProductCardProps {
@@ -76,6 +77,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           alt={hasMultiplePhotos ? `${product.name} - ${activeSlide.label}` : product.name}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           loading="lazy"
+          onError={(e) => handleProductImageError(e, activeSlide.src)}
         />
 
         {/* Stock Status Badge */}

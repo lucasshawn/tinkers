@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LogOut, ArrowLeft, Layers, Users, CreditCard, Palette, AlertCircle, X, CheckCircle2, History } from 'lucide-react';
 import { adminAuth, AdminSession } from '../../services/adminAuth';
 import { adminApi } from '../../services/adminApi';
@@ -17,8 +17,8 @@ import {
   DEFAULT_CATEGORIES,
   getStoredProducts,
   saveStoredProducts,
-  PRODUCTS_STORAGE_KEY,
 } from '../../utils/productUtils';
+import { removeExpiringStorageItem } from '../../utils/cacheUtils';
 import {
   getStoredChanges,
   saveStoredChanges,
@@ -47,18 +47,26 @@ export const AdminPortal: React.FC = () => {
   const { settings, updateSettings, hydrateSettings } = useSettings();
   const [notification, setNotification] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const hasLocalInventorySaveRef = useRef(false);
+  const hasLocalSettingsSaveRef = useRef(false);
 
   useEffect(() => {
     if (import.meta.env.MODE === 'test') return;
+    let cancelled = false;
+
+    // Always revalidate from the server on mount so edits made on another device
+    // appear immediately and are never overwritten by a stale localStorage copy.
     adminApi.loadStoreData().then((data) => {
-      if (!localStorage.getItem(PRODUCTS_STORAGE_KEY) && data?.products && Array.isArray(data.products)) {
+      if (cancelled || !data) return;
+      if (!hasLocalInventorySaveRef.current && data.products && Array.isArray(data.products)) {
         setProducts(data.products);
         saveStoredProducts(data.products);
       }
-      if (!localStorage.getItem(SETTINGS_STORAGE_KEY) && data?.settings && typeof data.settings === 'object') {
+      if (!hasLocalSettingsSaveRef.current && data.settings && typeof data.settings === 'object') {
+        removeExpiringStorageItem(SETTINGS_STORAGE_KEY);
         hydrateSettings(data.settings);
       }
-      if (data?.changes && Array.isArray(data.changes)) {
+      if (data.changes && Array.isArray(data.changes)) {
         setChanges((prev) => {
           const merged = mergeChanges(prev, data.changes!);
           saveStoredChanges(merged);
@@ -66,6 +74,10 @@ export const AdminPortal: React.FC = () => {
         });
       }
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [hydrateSettings]);
 
   if (!session) {
@@ -135,6 +147,7 @@ export const AdminPortal: React.FC = () => {
         : updated;
 
     // Optimistically update catalog and localStorage immediately so new/edited items appear right away
+    hasLocalInventorySaveRef.current = true;
     setProducts(localUpdated);
     saveStoredProducts(localUpdated);
 
@@ -154,6 +167,7 @@ export const AdminPortal: React.FC = () => {
     setErrorMessage(null);
     const previousSettings = settings;
     const diffEntries = diffSettingsChanges(session.email, previousSettings, newSettings);
+    hasLocalSettingsSaveRef.current = true;
     updateSettings(newSettings);
     try {
       const res = await adminApi.saveSettings(newSettings);
@@ -171,6 +185,7 @@ export const AdminPortal: React.FC = () => {
     setErrorMessage(null);
     const previousAdmins = settings.admins || [];
     const diffEntries = diffAdminsChanges(session.email, previousAdmins, updatedAdmins);
+    hasLocalSettingsSaveRef.current = true;
     updateSettings({
       ...settings,
       admins: updatedAdmins,
@@ -197,11 +212,13 @@ export const AdminPortal: React.FC = () => {
     const previousProducts = products;
     try {
       const res = await adminApi.saveCategories(updatedCategories, updatedProducts);
+      hasLocalSettingsSaveRef.current = true;
       updateSettings({
         ...settings,
         categories: updatedCategories,
       });
       if (updatedProducts) {
+        hasLocalInventorySaveRef.current = true;
         setProducts(updatedProducts);
         saveStoredProducts(updatedProducts);
         recordChanges(diffInventoryChanges(session.email, previousProducts, updatedProducts));

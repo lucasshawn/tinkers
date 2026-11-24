@@ -1,29 +1,7 @@
 import { Handler } from '@netlify/functions';
-import crypto from 'crypto';
 import Stripe from 'stripe';
-import { getAllowedAdmins } from './admin-auth';
+import { verifySessionToken } from './admin-auth';
 import { PaymentItem, PaymentsResponse, TransactionRecord } from '../../src/types/payments';
-
-function verifyToken(authHeader?: string): string | null {
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  const token = authHeader.replace('Bearer ', '').trim();
-  try {
-    const [payloadBase64, signature] = token.split('.');
-    if (!payloadBase64 || !signature) return null;
-    const sessionSecret = process.env.ADMIN_SESSION_SECRET || 'weebles-studio-dev-secret-2026';
-    const expectedSig = crypto.createHmac('sha256', sessionSecret).update(payloadBase64).digest('hex');
-    if (signature !== expectedSig) return null;
-    const decoded = Buffer.from(payloadBase64, 'base64').toString('utf-8');
-    const [email, exp] = decoded.split(':');
-    if (!email || !exp || isNaN(Number(exp))) return null;
-    if (Number(exp) < Date.now()) return null;
-    const allowedAdmins = getAllowedAdmins();
-    if (!allowedAdmins.includes(email.toLowerCase())) return null;
-    return email.toLowerCase();
-  } catch {
-    return null;
-  }
-}
 
 const DEMO_TRANSACTIONS: TransactionRecord[] = [
   {
@@ -90,7 +68,7 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  const verifiedAdmin = verifyToken(authHeader);
+  const verifiedAdmin = await verifySessionToken(authHeader, event);
   if (!verifiedAdmin) {
     return {
       statusCode: 403,

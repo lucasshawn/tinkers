@@ -153,6 +153,33 @@ describe('admin-payments Netlify Function', () => {
     expect(data.transactions[0].giftNote).toBe('For Sarah with love!');
     expect(data.transactions[0].items[0].name).toBe('Chubby Bumblebee (Keychain)');
   });
+
+  it('authorizes session token for an admin persisted in Netlify Blobs', async () => {
+    delete process.env.STRIPE_SECRET_KEY;
+    const weeblesToken = createSessionToken('weeblesclay@gmail.com', Date.now() + 86400000);
+    const blobsPayload = Buffer.from(
+      JSON.stringify({ url: 'https://edge.netlify.com', token: 'blobs-token-123' })
+    ).toString('base64');
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        admins: ['lucasshawn@gmail.com', 'lucascierra24@gmail.com', 'weeblesclay@gmail.com'],
+      }),
+    }) as any;
+
+    const event = {
+      httpMethod: 'GET',
+      headers: {
+        authorization: `Bearer ${weeblesToken}`,
+        'x-nf-site-id': 'site-abc',
+      },
+      blobs: blobsPayload,
+    };
+
+    const res = (await handler(event as any, {} as any)) as any;
+    expect(res.statusCode).toBe(200);
+  });
 });
 
 describe('adminPayments client service', () => {

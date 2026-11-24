@@ -144,6 +144,147 @@ describe('admin-auth Netlify Function', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/missing authentication credential/i);
   });
+
+  it('authorizes an admin persisted in Netlify Blobs even when not in static settings.json', async () => {
+    const cred = makeJwt({
+      email: 'weeblesclay@gmail.com',
+      name: 'Cierra',
+      picture: 'https://example.com/cierra.jpg',
+      email_verified: true,
+    });
+
+    const blobsPayload = Buffer.from(
+      JSON.stringify({ url: 'https://edge.netlify.com', token: 'blobs-token-123' })
+    ).toString('base64');
+
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (String(url).startsWith('https://oauth2.googleapis.com/tokeninfo')) {
+        return {
+          ok: true,
+          json: async () => ({
+            email: 'weeblesclay@gmail.com',
+            name: 'Cierra',
+            picture: 'https://example.com/cierra.jpg',
+            email_verified: true,
+          }),
+        };
+      }
+      if (String(url) === 'https://edge.netlify.com/site-abc/site:weebles-store/settings') {
+        return {
+          ok: true,
+          json: async () => ({
+            admins: ['lucasshawn@gmail.com', 'lucascierra24@gmail.com', 'weeblesclay@gmail.com'],
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    }) as any;
+
+    const event = {
+      httpMethod: 'POST',
+      headers: { 'x-nf-site-id': 'site-abc' },
+      blobs: blobsPayload,
+      body: JSON.stringify({ credential: cred }),
+    };
+
+    const res = await handler(event as any, {} as any) as any;
+    expect(res.statusCode).toBe(200);
+    const data = JSON.parse(res.body);
+    expect(data.email).toBe('weeblesclay@gmail.com');
+    expect(data.token).toBeDefined();
+  });
+
+  it('rejects an admin removed from persisted Netlify Blobs settings', async () => {
+    const cred = makeJwt({
+      email: 'lucascierra24@gmail.com',
+      name: 'Cierra',
+      email_verified: true,
+    });
+
+    const blobsPayload = Buffer.from(
+      JSON.stringify({ url: 'https://edge.netlify.com', token: 'blobs-token-123' })
+    ).toString('base64');
+
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (String(url).startsWith('https://oauth2.googleapis.com/tokeninfo')) {
+        return {
+          ok: true,
+          json: async () => ({
+            email: 'lucascierra24@gmail.com',
+            name: 'Cierra',
+            email_verified: true,
+          }),
+        };
+      }
+      if (String(url) === 'https://edge.netlify.com/site-abc/site:weebles-store/settings') {
+        return {
+          ok: true,
+          json: async () => ({
+            admins: ['lucasshawn@gmail.com', 'weeblesclay@gmail.com'],
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    }) as any;
+
+    const event = {
+      httpMethod: 'POST',
+      headers: { 'x-nf-site-id': 'site-abc' },
+      blobs: blobsPayload,
+      body: JSON.stringify({ credential: cred }),
+    };
+
+    const res = await handler(event as any, {} as any) as any;
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toMatch(
+      /unauthorized: lucascierra24@gmail\.com is not an authorized administrator/i
+    );
+  });
+
+  it('falls back to default allowed admins if persisted settings.admins is empty', async () => {
+    const cred = makeJwt({
+      email: 'lucasshawn@gmail.com',
+      name: 'Shawn',
+      email_verified: true,
+    });
+
+    const blobsPayload = Buffer.from(
+      JSON.stringify({ url: 'https://edge.netlify.com', token: 'blobs-token-123' })
+    ).toString('base64');
+
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (String(url).startsWith('https://oauth2.googleapis.com/tokeninfo')) {
+        return {
+          ok: true,
+          json: async () => ({
+            email: 'lucasshawn@gmail.com',
+            name: 'Shawn',
+            email_verified: true,
+          }),
+        };
+      }
+      if (String(url) === 'https://edge.netlify.com/site-abc/site:weebles-store/settings') {
+        return {
+          ok: true,
+          json: async () => ({
+            admins: [],
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    }) as any;
+
+    const event = {
+      httpMethod: 'POST',
+      headers: { 'x-nf-site-id': 'site-abc' },
+      blobs: blobsPayload,
+      body: JSON.stringify({ credential: cred }),
+    };
+
+    const res = await handler(event as any, {} as any) as any;
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).email).toBe('lucasshawn@gmail.com');
+  });
 });
 
 describe('adminAuth client service', () => {

@@ -8,6 +8,7 @@ import {
   formatProductPriceSummary,
   getProductCategories,
 } from '../../utils/productUtils';
+import { handleProductImageError } from '../../utils/imageUtils';
 import { WeebleEditorModal } from './WeebleEditorModal';
 import { CategoryManagerModal } from './CategoryManagerModal';
 
@@ -139,6 +140,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
                     src={item.images[0] || '/images/products/placeholder.jpg'}
                     alt={item.name}
                     className="w-16 h-16 rounded-2xl object-cover border border-pink-200 bg-weeble-pinkBg shrink-0"
+                    onError={(e) => handleProductImageError(e, item.images[0])}
                   />
 
                   <div className="flex-1 min-w-0">

@@ -1,20 +1,20 @@
 import { Handler, HandlerResponse } from '@netlify/functions';
-import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { getAllowedAdmins } from './admin-auth';
+import { verifySessionToken } from './admin-auth';
+import {
+  TMP_SETTINGS_FILE,
+  saveToNetlifyBlobs as saveToNetlifyBlobsImpl,
+  readFromNetlifyBlobs as readFromNetlifyBlobsImpl,
+  loadPersistedSettings as loadPersistedSettingsImpl,
+} from './_lib/storage';
 import defaultProductsData from '../../src/data/products.json';
-import defaultSettingsData from '../../src/data/settings.json';
 import defaultChangesData from '../../src/data/changes.json';
 import { pruneRemovedCategories } from '../../src/utils/productUtils';
-import { SiteSettings } from '../../src/types/settings';
-import { normalizeSettings } from '../../src/utils/socialPlatforms';
 
 const TMP_PRODUCTS_FILE = 'weebles-products.json';
-const TMP_SETTINGS_FILE = 'weebles-settings.json';
 const TMP_CHANGES_FILE = 'weebles-changes.json';
-const BLOB_STORE_NAME = 'site:weebles-store';
 const CHANGE_LOG_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_CONTENT_IMAGE_BYTES = 2 * 1024 * 1024;
 const CONTENT_IMAGE_MIME_BY_EXT: Record<string, string> = {
@@ -24,6 +24,7 @@ const CONTENT_IMAGE_MIME_BY_EXT: Record<string, string> = {
   '.webp': 'image/webp',
   '.gif': 'image/gif',
 };
+const SAFE_RASTER_MIME_TYPES = new Set(Object.values(CONTENT_IMAGE_MIME_BY_EXT));
 const SAFE_CONTENT_IMAGE_NAME_RE = /^[a-zA-Z0-9._-]+\.(png|jpe?g|webp|gif)$/i;
 const SAFE_DATA_IMAGE_PREFIX_RE = /^data:image\/(png|jpe?g|webp|gif);base64,/i;
 const VALID_BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -68,83 +69,12 @@ function filterRecentChanges(entries: any[], now: number = Date.now()): any[] {
   });
 }
 
-interface BlobsContext {
-  edgeURL: string;
-  siteID: string;
-  token: string;
-}
-
-function getBlobsContext(event: any): BlobsContext | null {
-  try {
-    if (event?.blobs) {
-      const decoded = Buffer.from(event.blobs, 'base64').toString('utf-8');
-      const data = JSON.parse(decoded);
-      const siteID =
-        event.headers?.['x-nf-site-id'] ||
-        event.headers?.['X-Nf-Site-Id'] ||
-        data.siteID;
-      if (data.url && data.token && siteID) {
-        return {
-          edgeURL: data.url,
-          siteID,
-          token: data.token,
-        };
-      }
-    }
-    const envCtx = process.env.NETLIFY_BLOBS_CONTEXT;
-    if (envCtx) {
-      const decoded = Buffer.from(envCtx, 'base64').toString('utf-8');
-      const data = JSON.parse(decoded);
-      const edgeURL = data.edgeURL || data.url;
-      const siteID = data.siteID || event?.headers?.['x-nf-site-id'];
-      if (edgeURL && data.token && siteID) {
-        return {
-          edgeURL,
-          siteID,
-          token: data.token,
-        };
-      }
-    }
-  } catch {}
-  return null;
-}
-
 export async function saveToNetlifyBlobs(event: any, key: string, jsonString: string): Promise<boolean> {
-  const ctx = getBlobsContext(event);
-  if (!ctx) return false;
-  try {
-    const url = new URL(`/${ctx.siteID}/${BLOB_STORE_NAME}/${key}`, ctx.edgeURL).toString();
-    const res = await fetch(url, {
-      method: 'PUT',
-      headers: {
-        authorization: `Bearer ${ctx.token}`,
-        'content-type': 'application/json',
-        'cache-control': 'max-age=0, stale-while-revalidate=60',
-      },
-      body: jsonString,
-    });
-    return Boolean(res && res.ok);
-  } catch {
-    return false;
-  }
+  return saveToNetlifyBlobsImpl(event, key, jsonString);
 }
 
 export async function readFromNetlifyBlobs<T>(event: any, key: string): Promise<T | null> {
-  const ctx = getBlobsContext(event);
-  if (!ctx) return null;
-  try {
-    const url = new URL(`/${ctx.siteID}/${BLOB_STORE_NAME}/${key}`, ctx.edgeURL).toString();
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        authorization: `Bearer ${ctx.token}`,
-      },
-    });
-    if (res && res.ok) {
-      return (await res.json()) as T;
-    }
-  } catch {}
-  return null;
+  return readFromNetlifyBlobsImpl<T>(event, key);
 }
 
 function writeJsonWithFallback(localRelativePath: string, tmpFilename: string, jsonString: string): 'local' | 'tmp' {
@@ -194,34 +124,7 @@ export async function loadPersistedProducts(event?: any): Promise<any[]> {
 }
 
 export async function loadPersistedSettings(event?: any): Promise<any> {
-  if (event) {
-    const blobSettings = await readFromNetlifyBlobs<any>(event, 'settings');
-    if (blobSettings && typeof blobSettings === 'object') {
-      return normalizeSettings(blobSettings, defaultSettingsData as SiteSettings);
-    }
-  }
-
-  try {
-    const tmpPath = path.join(os.tmpdir(), TMP_SETTINGS_FILE);
-    if (fs.existsSync(tmpPath)) {
-      const content = fs.readFileSync(tmpPath, 'utf-8');
-      if (content) {
-        return normalizeSettings(JSON.parse(content) || undefined, defaultSettingsData as SiteSettings);
-      }
-    }
-  } catch {}
-
-  try {
-    const localPath = path.resolve(process.cwd(), 'src/data/settings.json');
-    if (fs.existsSync(localPath)) {
-      const content = fs.readFileSync(localPath, 'utf-8');
-      if (content) {
-        return normalizeSettings(JSON.parse(content) || undefined, defaultSettingsData as SiteSettings);
-      }
-    }
-  } catch {}
-
-  return normalizeSettings(undefined, defaultSettingsData as SiteSettings);
+  return loadPersistedSettingsImpl(event);
 }
 
 export async function loadPersistedChanges(event?: any): Promise<any[]> {
@@ -253,27 +156,6 @@ export async function loadPersistedChanges(event?: any): Promise<any[]> {
   } catch {}
 
   return Array.isArray(defaultChangesData) ? filterRecentChanges(defaultChangesData) : [];
-}
-
-function verifyToken(authHeader?: string): string | null {
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  const token = authHeader.replace('Bearer ', '').trim();
-  try {
-    const [payloadBase64, signature] = token.split('.');
-    if (!payloadBase64 || !signature) return null;
-    const sessionSecret = process.env.ADMIN_SESSION_SECRET || 'weebles-studio-dev-secret-2026';
-    const expectedSig = crypto.createHmac('sha256', sessionSecret).update(payloadBase64).digest('hex');
-    if (signature !== expectedSig) return null;
-    const decoded = Buffer.from(payloadBase64, 'base64').toString('utf-8');
-    const [email, exp] = decoded.split(':');
-    if (!email || !exp || isNaN(Number(exp))) return null;
-    if (Number(exp) < Date.now()) return null;
-    const allowedAdmins = getAllowedAdmins();
-    if (!allowedAdmins.includes(email.toLowerCase())) return null;
-    return email.toLowerCase();
-  } catch {
-    return null;
-  }
 }
 
 async function commitToGitHub(filePath: string, contentBase64: string, commitMessage: string) {
@@ -330,6 +212,7 @@ export const handler: Handler = async (event): Promise<HandlerResponse> => {
       statusCode: 200,
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
       },
       body: JSON.stringify({ products, settings, changes }),
     };
@@ -393,6 +276,71 @@ export const handler: Handler = async (event): Promise<HandlerResponse> => {
     };
   }
 
+  if (event.httpMethod === 'GET' && event.queryStringParameters?.action === 'product-image') {
+    const name = event.queryStringParameters?.name || '';
+    if (!SAFE_CONTENT_IMAGE_NAME_RE.test(name) || name.includes('..') || path.basename(name) !== name) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Invalid image filename' }),
+      };
+    }
+    const ext = path.extname(name).toLowerCase();
+    const extContentType = CONTENT_IMAGE_MIME_BY_EXT[ext] || 'image/jpeg';
+
+    const blobImg = await readFromNetlifyBlobs<{ contentType?: string; base64?: string }>(
+      event,
+      `product-image:${name}`
+    );
+    if (blobImg?.base64) {
+      const normalizedBlobMime = blobImg.contentType?.toLowerCase() === 'image/jpg'
+        ? 'image/jpeg'
+        : blobImg.contentType?.toLowerCase();
+      const safeContentType =
+        normalizedBlobMime && SAFE_RASTER_MIME_TYPES.has(normalizedBlobMime)
+          ? normalizedBlobMime
+          : extContentType;
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': safeContentType,
+          'Cache-Control': 'public, max-age=43200, must-revalidate',
+          'X-Content-Type-Options': 'nosniff',
+        },
+        body: blobImg.base64,
+        isBase64Encoded: true,
+      };
+    }
+
+    const candidates = [
+      path.resolve(process.cwd(), 'public/images/products', name),
+      path.join(os.tmpdir(), `weebles-img-${name}`),
+    ];
+    for (const candidate of candidates) {
+      try {
+        if (fs.existsSync(candidate)) {
+          const buf = fs.readFileSync(candidate);
+          return {
+            statusCode: 200,
+            headers: {
+              'Content-Type': extContentType,
+              'Cache-Control': 'public, max-age=43200, must-revalidate',
+              'X-Content-Type-Options': 'nosniff',
+            },
+            body: buf.toString('base64'),
+            isBase64Encoded: true,
+          };
+        }
+      } catch {}
+    }
+
+    return {
+      statusCode: 404,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Image not found' }),
+    };
+  }
+
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
@@ -402,7 +350,7 @@ export const handler: Handler = async (event): Promise<HandlerResponse> => {
     return { statusCode: 401, body: JSON.stringify({ error: 'Authentication required' }) };
   }
 
-  const verifiedAdmin = verifyToken(authHeader);
+  const verifiedAdmin = await verifySessionToken(authHeader, event);
   if (!verifiedAdmin) {
     return { statusCode: 403, body: JSON.stringify({ error: 'Unauthorized admin session' }) };
   }
@@ -427,6 +375,20 @@ export const handler: Handler = async (event): Promise<HandlerResponse> => {
       const cleanFilename = path.basename(img.filename).replace(/[^a-zA-Z0-9._-]/g, '');
       const imagePath = `public/images/products/${cleanFilename}`;
       const rawBase64 = img.base64Data.replace(/^data:image\/[\w+.-]+;base64,/, '');
+
+      const dataUrlMatch = img.base64Data.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/i);
+      const ext = path.extname(cleanFilename).toLowerCase();
+      const rawMime = dataUrlMatch ? dataUrlMatch[1].toLowerCase() : '';
+      const normalizedMime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
+      const contentType = SAFE_RASTER_MIME_TYPES.has(normalizedMime)
+        ? normalizedMime
+        : CONTENT_IMAGE_MIME_BY_EXT[ext] || 'image/jpeg';
+
+      await saveToNetlifyBlobs(
+        event,
+        `product-image:${cleanFilename}`,
+        JSON.stringify({ contentType, base64: rawBase64 })
+      );
 
       if (githubToken) {
         await commitToGitHub(imagePath, rawBase64, `chore(admin): upload product image ${cleanFilename}`);

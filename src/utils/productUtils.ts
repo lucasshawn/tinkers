@@ -1,4 +1,9 @@
 import { CategoryOption, Product, ProductImageSlide, VariantType } from '../types';
+import {
+  CACHE_TTL_MS,
+  readExpiringStorageItem,
+  writeExpiringStorageItem,
+} from './cacheUtils';
 
 export const DEFAULT_CATEGORIES: CategoryOption[] = [
   { id: 'animals', label: 'Critters', emoji: '🐰' },
@@ -86,9 +91,12 @@ export function formatCategoryLabel(category: CategoryOption): string {
 
 export const PRODUCTS_STORAGE_KEY = 'weebles_products_v1';
 
-export function getStoredProducts(fallbackProducts: Product[]): Product[] {
+export function getStoredProducts(
+  fallbackProducts: Product[],
+  now: number = Date.now()
+): Product[] {
   try {
-    const stored = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+    const stored = readExpiringStorageItem(PRODUCTS_STORAGE_KEY, CACHE_TTL_MS, now);
     if (stored) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
@@ -101,12 +109,8 @@ export function getStoredProducts(fallbackProducts: Product[]): Product[] {
   return fallbackProducts;
 }
 
-export function saveStoredProducts(products: Product[]): void {
-  try {
-    localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
-  } catch {
-    // Ignore storage quota errors
-  }
+export function saveStoredProducts(products: Product[], now: number = Date.now()): void {
+  writeExpiringStorageItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products), now);
 }
 
 export function formatPrice(amount: number): string {

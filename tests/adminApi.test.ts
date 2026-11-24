@@ -441,6 +441,74 @@ describe('admin-save Netlify Function', () => {
     );
   });
 
+  it('authorizes admin-save requests from an admin persisted in Netlify Blobs and rejects revoked admins', async () => {
+    const weeblesToken = createSessionToken('weeblesclay@gmail.com', 9999999999999);
+    const blobsPayload = Buffer.from(
+      JSON.stringify({ url: 'https://edge.netlify.com', token: 'blobs-token-123' })
+    ).toString('base64');
+
+    const storedSettings = {
+      contactEmail: 'weeblesclay@gmail.com',
+      customOrderEmail: 'weeblesclay@gmail.com',
+      socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+      admins: ['lucasshawn@gmail.com', 'weeblesclay@gmail.com'],
+    };
+
+    globalThis.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+      if (String(url).endsWith('/settings')) {
+        return { ok: true, status: 200, json: async () => storedSettings };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    }) as any;
+
+    // Newly added admin persisted in Blobs succeeds
+    const allowedRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: {
+          authorization: `Bearer ${weeblesToken}`,
+          'x-nf-site-id': 'site-abc',
+        },
+        blobs: blobsPayload,
+        body: JSON.stringify({
+          type: 'settings',
+          settings: {
+            contactEmail: 'weeblesclay@gmail.com',
+            customOrderEmail: 'weeblesclay@gmail.com',
+            socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+          },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(allowedRes.statusCode).toBe(200);
+
+    // Removed admin (lucascierra24@gmail.com is no longer in storedSettings.admins) is rejected
+    const revokedRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: {
+          authorization: `Bearer ${validCierraToken}`,
+          'x-nf-site-id': 'site-abc',
+        },
+        blobs: blobsPayload,
+        body: JSON.stringify({
+          type: 'settings',
+          settings: {
+            contactEmail: 'weeblesclay@gmail.com',
+            customOrderEmail: 'weeblesclay@gmail.com',
+            socials: { tiktok: '', instagram: '', facebookMarketplace: '' },
+          },
+        }),
+      } as any,
+      {} as any
+    )) as any;
+    expect(revokedRes.statusCode).toBe(403);
+  });
+
   it('rejects invalid save payload with 400', async () => {
     const event = {
       httpMethod: 'POST',
@@ -1327,6 +1395,122 @@ describe('admin-save Netlify Function', () => {
     )) as any;
     expect(persistFailRes.statusCode).toBe(500);
     expect(JSON.parse(persistFailRes.body).error).toMatch(/failed to persist uploaded image/i);
+  });
+
+  it('persists uploaded product images to Netlify Blobs on inventory save and serves them via GET ?action=product-image', async () => {
+    const rawB64 =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const blobsPayload = Buffer.from(
+      JSON.stringify({ url: 'https://edge.netlify.com', token: 'netlify-blobs-token-xyz' })
+    ).toString('base64');
+
+    const storedBlobs = new Map<string, string>();
+    globalThis.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        storedBlobs.set(String(url), String(init.body || ''));
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+      const existing = storedBlobs.get(String(url));
+      if (existing) {
+        return { ok: true, status: 200, json: async () => JSON.parse(existing) };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    });
+
+    const saveRes = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: {
+          authorization: `Bearer ${validToken}`,
+          'x-nf-site-id': 'site-12345',
+        },
+        blobs: blobsPayload,
+        body: JSON.stringify({
+          type: 'inventory',
+          products: [
+            {
+              id: 'weeble-crunchy',
+              name: 'Crunchy',
+              description: 'Crunchy clay friend',
+              price: 14,
+              images: ['/images/products/crunchy.jpg'],
+              categories: ['animals'],
+              availableVariants: ['magnet'],
+              inStock: true,
+              stockCount: 1,
+            },
+          ],
+          newImages: [
+            {
+              filename: 'crunchy.jpg',
+              base64Data: `data:image/jpeg;base64,${rawB64}`,
+            },
+          ],
+        }),
+      } as any,
+      {} as any
+    )) as any;
+
+    expect(saveRes.statusCode).toBe(200);
+    expect(
+      Array.from(storedBlobs.keys()).some((k) => k.endsWith('/product-image:crunchy.jpg'))
+    ).toBe(true);
+
+    // Fetch saved product image via GET ?action=product-image
+    const getRes = (await handler(
+      {
+        httpMethod: 'GET',
+        queryStringParameters: { action: 'product-image', name: 'crunchy.jpg' },
+        headers: { 'x-nf-site-id': 'site-12345' },
+        blobs: blobsPayload,
+      } as any,
+      {} as any
+    )) as any;
+
+    expect(getRes.statusCode).toBe(200);
+    expect(getRes.headers['Content-Type']).toBe('image/jpeg');
+    expect(getRes.headers['X-Content-Type-Options']).toBe('nosniff');
+    expect(getRes.headers['Cache-Control']).toBe('public, max-age=43200, must-revalidate');
+    expect(getRes.isBase64Encoded).toBe(true);
+    expect(getRes.body).toBe(rawB64);
+
+    // Rejects traversal and SVG filenames
+    const traversalRes = (await handler(
+      {
+        httpMethod: 'GET',
+        queryStringParameters: { action: 'product-image', name: '../secret.jpg' },
+        headers: {},
+      } as any,
+      {} as any
+    )) as any;
+    expect(traversalRes.statusCode).toBe(400);
+
+    const svgRes = (await handler(
+      {
+        httpMethod: 'GET',
+        queryStringParameters: { action: 'product-image', name: 'bad.svg' },
+        headers: {},
+      } as any,
+      {} as any
+    )) as any;
+    expect(svgRes.statusCode).toBe(400);
+
+    // Ignores unsafe MIME types stored in Blobs and falls back to safe extension MIME
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ contentType: 'image/svg+xml', base64: rawB64 }),
+    });
+    const sanitizedMimeRes = (await handler(
+      {
+        httpMethod: 'GET',
+        queryStringParameters: { action: 'product-image', name: 'safe.png' },
+        headers: { 'x-nf-site-id': 'site-12345' },
+        blobs: blobsPayload,
+      } as any,
+      {} as any
+    )) as any;
+    expect(sanitizedMimeRes.statusCode).toBe(200);
+    expect(sanitizedMimeRes.headers['Content-Type']).toBe('image/png');
   });
 });
 

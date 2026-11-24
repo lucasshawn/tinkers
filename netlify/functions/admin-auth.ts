@@ -1,11 +1,19 @@
 import { Handler } from '@netlify/functions';
 import crypto from 'crypto';
 import defaultSettingsData from '../../src/data/settings.json';
+import { loadPersistedSettings } from './_lib/storage';
 
 export const DEFAULT_ALLOWED_ADMINS = [
   'lucasshawn@gmail.com',
   'lucascierra24@gmail.com',
 ];
+
+const getEnvAdmins = (): string[] =>
+  process.env.ALLOWED_ADMIN_EMAILS
+    ? process.env.ALLOWED_ADMIN_EMAILS.split(',')
+        .map((e) => e.toLowerCase().trim())
+        .filter(Boolean)
+    : [];
 
 export const getAllowedAdmins = (): string[] => {
   let settingsAdmins: string[] = [];
@@ -15,9 +23,7 @@ export const getAllowedAdmins = (): string[] => {
     }
   } catch {}
 
-  const envAdmins = process.env.ALLOWED_ADMIN_EMAILS
-    ? process.env.ALLOWED_ADMIN_EMAILS.split(',').map((e) => e.toLowerCase().trim()).filter(Boolean)
-    : [];
+  const envAdmins = getEnvAdmins();
   return Array.from(
     new Set(
       [...DEFAULT_ALLOWED_ADMINS, ...settingsAdmins, ...envAdmins]
@@ -26,6 +32,26 @@ export const getAllowedAdmins = (): string[] => {
     )
   );
 };
+
+export async function resolveAllowedAdmins(event?: any): Promise<string[]> {
+  const envAdmins = getEnvAdmins();
+  try {
+    const persistedSettings = await loadPersistedSettings(event);
+    if (Array.isArray(persistedSettings?.admins)) {
+      const persistedAdmins = persistedSettings.admins
+        .filter((e: unknown): e is string => typeof e === 'string')
+        .map((e: string) => e.toLowerCase().trim())
+        .filter(Boolean);
+      if (persistedAdmins.length > 0) {
+        return Array.from(new Set([...persistedAdmins, ...envAdmins]));
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load persisted settings for admin authorization:', err);
+  }
+
+  return getAllowedAdmins();
+}
 
 export const ALLOWED_ADMINS = getAllowedAdmins();
 
@@ -40,6 +66,34 @@ export function createSessionToken(
   const payloadBase64 = Buffer.from(payload).toString('base64');
   const signature = crypto.createHmac('sha256', secret).update(payloadBase64).digest('hex');
   return `${payloadBase64}.${signature}`;
+}
+
+export async function verifySessionToken(
+  authHeader?: string,
+  event?: any
+): Promise<string | null> {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.replace('Bearer ', '').trim();
+  try {
+    const [payloadBase64, signature] = token.split('.');
+    if (!payloadBase64 || !signature) return null;
+    const sessionSecret = process.env.ADMIN_SESSION_SECRET || SESSION_SECRET;
+    const expectedSig = crypto
+      .createHmac('sha256', sessionSecret)
+      .update(payloadBase64)
+      .digest('hex');
+    if (signature !== expectedSig) return null;
+    const decoded = Buffer.from(payloadBase64, 'base64').toString('utf-8');
+    const [email, exp] = decoded.split(':');
+    if (!email || !exp || isNaN(Number(exp))) return null;
+    if (Number(exp) < Date.now()) return null;
+    const normalizedEmail = email.toLowerCase().trim();
+    const allowedAdmins = await resolveAllowedAdmins(event);
+    if (!allowedAdmins.includes(normalizedEmail)) return null;
+    return normalizedEmail;
+  } catch {
+    return null;
+  }
 }
 
 export const handler: Handler = async (event) => {
@@ -134,7 +188,7 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    const currentAllowedAdmins = getAllowedAdmins();
+    const currentAllowedAdmins = await resolveAllowedAdmins(event);
     if (!currentAllowedAdmins.includes(userEmail)) {
       return {
         statusCode: 403,

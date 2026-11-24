@@ -1,5 +1,10 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { sanitizeImageFilename, readAndCompressImage } from '../src/utils/imageUtils';
+import {
+  sanitizeImageFilename,
+  readAndCompressImage,
+  getProductImageFallbackUrl,
+  handleProductImageError,
+} from '../src/utils/imageUtils';
 
 describe('imageUtils', () => {
   const originalFileReader = window.FileReader;
@@ -49,5 +54,39 @@ describe('imageUtils', () => {
       filename: 'mybee.png',
       base64Data: mockResult,
     });
+  });
+
+  it('builds a Netlify Blobs fallback URL only for valid /images/products/ paths', () => {
+    expect(getProductImageFallbackUrl('/images/products/crunchy.jpg')).toBe(
+      '/.netlify/functions/admin-save?action=product-image&name=crunchy.jpg'
+    );
+    expect(getProductImageFallbackUrl('https://example.com/pic.jpg')).toBeNull();
+    expect(getProductImageFallbackUrl('data:image/png;base64,abc')).toBeNull();
+    expect(getProductImageFallbackUrl('/images/products/../secret.jpg')).toBeNull();
+    expect(getProductImageFallbackUrl('/images/products/evil.svg')).toBeNull();
+    expect(getProductImageFallbackUrl(undefined)).toBeNull();
+  });
+
+  it('applies product image fallback once per original src and updates if src changes', () => {
+    const img = document.createElement('img');
+    img.src = '/images/products/crunchy.jpg';
+
+    handleProductImageError({ currentTarget: img } as any, '/images/products/crunchy.jpg');
+    expect(img.getAttribute('src')).toBe(
+      '/.netlify/functions/admin-save?action=product-image&name=crunchy.jpg'
+    );
+    expect(img.dataset.fallbackFor).toBe('/images/products/crunchy.jpg');
+
+    // Second error for the same src does not overwrite/loop
+    img.setAttribute('src', 'https://already-failed.test/x');
+    handleProductImageError({ currentTarget: img } as any, '/images/products/crunchy.jpg');
+    expect(img.getAttribute('src')).toBe('https://already-failed.test/x');
+
+    // Switching to another product image src allows fallback for the new src
+    handleProductImageError({ currentTarget: img } as any, '/images/products/crunchy-magnet.jpg');
+    expect(img.getAttribute('src')).toBe(
+      '/.netlify/functions/admin-save?action=product-image&name=crunchy-magnet.jpg'
+    );
+    expect(img.dataset.fallbackFor).toBe('/images/products/crunchy-magnet.jpg');
   });
 });

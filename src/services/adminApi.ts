@@ -12,6 +12,7 @@ export const adminApi = {
     try {
       const res = await fetch('/.netlify/functions/admin-save?action=load', {
         method: 'GET',
+        cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' },
       });
       if (!res.ok) return null;

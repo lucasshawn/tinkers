@@ -365,6 +365,28 @@ describe('ProductCard', () => {
       expect(screen.getByAltText('Strawberry Bunny - Base')).toHaveAttribute('src', '/bunny-base.jpg');
       expect(screen.getByText('$14.00')).toBeInTheDocument();
     });
+
+    it('falls back to the Netlify Blobs product-image endpoint when a static /images/products/ file fails to load', () => {
+      const uploadedProduct: Product = {
+        ...mockProduct,
+        name: 'Crunchy',
+        images: ['/images/products/crunchy.jpg'],
+      };
+      render(
+        <CartProvider>
+          <ProductCard product={uploadedProduct} />
+        </CartProvider>
+      );
+
+      const img = screen.getByAltText('Crunchy');
+      expect(img).toHaveAttribute('src', '/images/products/crunchy.jpg');
+
+      fireEvent.error(img);
+      expect(img).toHaveAttribute(
+        'src',
+        '/.netlify/functions/admin-save?action=product-image&name=crunchy.jpg'
+      );
+    });
   });
 });
 

@@ -345,4 +345,17 @@ describe('CartDrawer', () => {
     const plusBtn = screen.getByRole('button', { name: /Increase quantity of Unique Fairy/i });
     expect(plusBtn).toBeDisabled();
   });
+
+  it('adds bottom clearance on the cart footer so the checkout button stays clear of floating bottom-right badges', () => {
+    render(
+      <CartProvider>
+        <CartTestHelper />
+      </CartProvider>
+    );
+
+    fireEvent.click(screen.getByText('Add Test Item'));
+
+    const footer = screen.getByTestId('cart-footer');
+    expect(footer).toHaveClass('pb-[calc(6rem_+_env(safe-area-inset-bottom))]');
+  });
 });

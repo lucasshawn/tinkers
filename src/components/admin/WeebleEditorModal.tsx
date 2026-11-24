@@ -8,7 +8,11 @@ import {
   VariantPrices,
   VariantType,
 } from '../../types';
-import { readAndCompressImage, sanitizeImageFilename } from '../../utils/imageUtils';
+import {
+  handleProductImageError,
+  readAndCompressImage,
+  sanitizeImageFilename,
+} from '../../utils/imageUtils';
 import { DEFAULT_CATEGORIES, formatCategoryLabel, getProductCategories } from '../../utils/productUtils';
 
 export interface WeebleEditorModalProps {
@@ -239,13 +243,17 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
       }
     }
 
+    const normalizedBaseImage =
+      finalImagePath && finalImagePath !== '/images/products/placeholder.jpg' ? finalImagePath : '';
+    const fallbackVariantImage = Object.values(finalVariantImages).find((v) => Boolean(v));
+
     const savedProduct: Product = {
       id,
       name,
       description,
       price: resolvedBasePrice,
       variantPrices,
-      images: [finalImagePath || '/images/products/placeholder.jpg'],
+      images: [normalizedBaseImage || fallbackVariantImage || '/images/products/placeholder.jpg'],
       ...(Object.keys(finalVariantImages).length > 0 ? { variantImages: finalVariantImages } : {}),
       categories: selectedCategories,
       availableVariants: variants,
@@ -276,6 +284,7 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
               src={previewUrl}
               alt={`${displayLabel} preview`}
               className="w-12 h-12 rounded-xl object-cover border border-pink-200 bg-weeble-pinkBg shrink-0"
+              onError={(e) => handleProductImageError(e, previewUrl)}
             />
           ) : (
             <div className="w-10 h-10 rounded-xl border border-dashed border-pink-300 bg-white/70 flex items-center justify-center text-pink-300 shrink-0">
@@ -526,6 +535,7 @@ export const WeebleEditorModal: React.FC<WeebleEditorModalProps> = ({
                   src={imageUrl}
                   alt="Preview"
                   className="w-16 h-16 rounded-xl object-cover border border-pink-200 bg-weeble-pinkBg"
+                  onError={(e) => handleProductImageError(e, imageUrl)}
                 />
               )}
               <div className="flex-1">

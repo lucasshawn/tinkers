@@ -2,6 +2,11 @@ import React, { createContext, useCallback, useContext, useState } from 'react';
 import { SiteSettings } from '../types/settings';
 import defaultSettingsData from '../data/settings.json';
 import { normalizeSettings } from '../utils/socialPlatforms';
+import {
+  readExpiringStorageItem,
+  writeExpiringStorageItem,
+  removeExpiringStorageItem,
+} from '../utils/cacheUtils';
 
 export interface SettingsContextType {
   settings: SiteSettings;
@@ -19,7 +24,7 @@ export const DEFAULT_SETTINGS: SiteSettings = normalizeSettings(rawDefaults, raw
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<SiteSettings>(() => {
     try {
-      const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      const stored = readExpiringStorageItem(SETTINGS_STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         return normalizeSettings(parsed, DEFAULT_SETTINGS);
@@ -33,11 +38,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const updateSettings = useCallback((newSettings: SiteSettings) => {
     const normalized = normalizeSettings(newSettings, DEFAULT_SETTINGS);
     setSettings(normalized);
-    try {
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(normalized));
-    } catch {
-      // Ignore
-    }
+    writeExpiringStorageItem(SETTINGS_STORAGE_KEY, JSON.stringify(normalized));
   }, []);
 
   const hydrateSettings = useCallback((remoteSettings: SiteSettings) => {
@@ -47,11 +48,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const resetSettings = useCallback(() => {
     setSettings(DEFAULT_SETTINGS);
-    try {
-      localStorage.removeItem(SETTINGS_STORAGE_KEY);
-    } catch {
-      // Ignore
-    }
+    removeExpiringStorageItem(SETTINGS_STORAGE_KEY);
   }, []);
 
   return (
