@@ -109,7 +109,7 @@ function getBlobsContext(event: any): BlobsContext | null {
   return null;
 }
 
-async function saveToNetlifyBlobs(event: any, key: string, jsonString: string): Promise<boolean> {
+export async function saveToNetlifyBlobs(event: any, key: string, jsonString: string): Promise<boolean> {
   const ctx = getBlobsContext(event);
   if (!ctx) return false;
   try {
@@ -129,7 +129,7 @@ async function saveToNetlifyBlobs(event: any, key: string, jsonString: string): 
   }
 }
 
-async function readFromNetlifyBlobs<T>(event: any, key: string): Promise<T | null> {
+export async function readFromNetlifyBlobs<T>(event: any, key: string): Promise<T | null> {
   const ctx = getBlobsContext(event);
   if (!ctx) return null;
   try {

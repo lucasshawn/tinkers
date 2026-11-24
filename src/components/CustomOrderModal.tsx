@@ -1,6 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Sparkles, CheckCircle2 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
+
+const MAX_REFERENCE_PHOTO_BYTES = 4 * 1024 * 1024; // 4 MB
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const commaIndex = result.indexOf(',');
+      resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+    };
+    reader.onerror = () => reject(new Error('Unable to read reference photo file.'));
+    reader.readAsDataURL(file);
+  });
+}
 
 export interface CustomOrderModalProps {
   isOpen: boolean;
@@ -12,6 +27,8 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
   const customOrderEmail = settings?.customOrderEmail || 'weeblesclay@gmail.com';
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -28,21 +45,69 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setErrorMessage(null);
     setIsSubmitting(true);
 
     const formData = new FormData(e.currentTarget);
+    const name = String(formData.get('name') || '').trim();
+    const email = String(formData.get('email') || '').trim();
+    const finish = String(formData.get('finish') || 'magnet').trim();
+    const description = String(formData.get('description') || '').trim();
+    const photoEntry = fileInputRef.current?.files?.[0] ?? formData.get('reference_photo');
 
     try {
-      // Netlify Form submission via standard POST with multipart/form-data support
-      await fetch('/', {
+      let referencePhoto:
+        | { filename: string; contentType: string; base64: string }
+        | undefined;
+
+      if (photoEntry instanceof File && photoEntry.size > 0) {
+        if (photoEntry.size > MAX_REFERENCE_PHOTO_BYTES) {
+          setErrorMessage('Reference photo must be 4 MB or smaller.');
+          return;
+        }
+        const base64 = await readFileAsBase64(photoEntry);
+        referencePhoto = {
+          filename: photoEntry.name,
+          contentType: photoEntry.type || 'image/jpeg',
+          base64,
+        };
+      }
+
+      // Send admin notification email via Netlify Function
+      const response = await fetch('/.netlify/functions/custom-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          email,
+          finish,
+          description,
+          ...(referencePhoto ? { referencePhoto } : {}),
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(
+          errData.error ||
+            `Unable to send your request right now. Please try again or email ${customOrderEmail}.`
+        );
+      }
+
+      // Keep Netlify Forms submission as a non-blocking backup log
+      fetch('/', {
         method: 'POST',
         body: formData,
-      });
-    } catch {
-      // Fallback grace for offline/dev preview
+      }).catch(() => {});
+
+      setSubmitted(true);
+    } catch (err: any) {
+      setErrorMessage(
+        err?.message ||
+          `Unable to send your request right now. Please try again or email ${customOrderEmail}.`
+      );
     } finally {
       setIsSubmitting(false);
-      setSubmitted(true);
     }
   };
 
@@ -82,6 +147,7 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
             <button
               onClick={() => {
                 setSubmitted(false);
+                setErrorMessage(null);
                 onClose();
               }}
               className="bg-weeble-pink text-white font-bubble font-bold px-6 py-2.5 rounded-full shadow-pillow hover:scale-105 transition-transform"
@@ -105,6 +171,15 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
                 Have a favorite pet, character, or sweet idea? Tell us what you want sculpted!
               </p>
             </div>
+
+            {errorMessage && (
+              <div
+                role="alert"
+                className="mb-4 rounded-xl bg-red-50 border border-red-200 px-3.5 py-2.5 text-xs font-semibold text-red-700"
+              >
+                {errorMessage}
+              </div>
+            )}
 
             <form
               name="custom-requests"
@@ -181,9 +256,10 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
 
               <div>
                 <label htmlFor="reference_photo" className="block text-xs font-bold text-weeble-text mb-1">
-                  Reference Photo (Optional) 📷
+                  Reference Photo (Optional, max 4 MB) 📷
                 </label>
                 <input
+                  ref={fileInputRef}
                   id="reference_photo"
                   type="file"
                   name="reference_photo"
@@ -195,7 +271,7 @@ export const CustomOrderModal: React.FC<CustomOrderModalProps> = ({ isOpen, onCl
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-weeble-pink hover:bg-pink-500 text-white font-bubble text-base font-bold py-3 px-6 rounded-full shadow-pillow hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2"
+                className="w-full bg-weeble-pink hover:bg-pink-500 text-white font-bubble text-base font-bold py-3 px-6 rounded-full shadow-pillow hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 <Send className="w-4 h-4" />
                 <span>{isSubmitting ? 'Sending Request...' : 'Send Custom Request 💌'}</span>

@@ -100,8 +100,15 @@ describe('CustomOrderModal', () => {
     expect(fileInput).toHaveAttribute('accept', 'image/*');
   });
 
-  it('submits form via fetch POST and displays confirmation card', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 200 }));
+  it('submits custom order to Netlify Function and displays confirmation card', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ok: true, emailed: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
     const handleClose = vi.fn();
 
     render(<CustomOrderModal isOpen={true} onClose={handleClose} />);
@@ -116,7 +123,19 @@ describe('CustomOrderModal', () => {
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/.netlify/functions/custom-order',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'Sophie',
+            email: 'sophie@example.com',
+            finish: 'magnet',
+            description: 'A cute pink piggy with a bow tie',
+          }),
+        })
+      );
     });
 
     expect(fetchSpy).toHaveBeenCalledWith(
@@ -139,8 +158,14 @@ describe('CustomOrderModal', () => {
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 
-  it('handles offline or failed network gracefully and still shows confirmation', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
+  it('shows inline error message when custom-order function fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Unable to send custom order request right now' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+
     render(<CustomOrderModal isOpen={true} onClose={vi.fn()} />);
 
     fireEvent.change(screen.getByLabelText(/Your Name/i), { target: { value: 'Test User' } });
@@ -149,6 +174,29 @@ describe('CustomOrderModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Send Custom Request/i }));
 
-    expect(await screen.findByText(/Request Sent! 💌/i)).toBeInTheDocument();
+    expect(
+      await screen.findByRole('alert')
+    ).toHaveTextContent(/Unable to send custom order request right now/i);
+    expect(screen.queryByText(/Request Sent! 💌/i)).not.toBeInTheDocument();
+  });
+
+  it('rejects oversized reference photos over 4 MB client-side', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    render(<CustomOrderModal isOpen={true} onClose={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText(/Your Name/i), { target: { value: 'Sophie' } });
+    fireEvent.change(screen.getByLabelText(/Your Email/i), { target: { value: 'sophie@example.com' } });
+    fireEvent.change(screen.getByLabelText(/Describe Your Vision/i), { target: { value: 'A cat' } });
+
+    const bigFile = new File([new Uint8Array(4 * 1024 * 1024 + 1)], 'huge.png', {
+      type: 'image/png',
+    });
+    const fileInput = screen.getByLabelText(/Reference Photo/i);
+    fireEvent.change(fileInput, { target: { files: [bigFile] } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Send Custom Request/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/4 MB or smaller/i);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

@@ -14,7 +14,8 @@ Emails are sent through **Gmail SMTP via Nodemailer** (no custom domain required
 ## Goals & Non-Goals
 
 ### Goals
-- Email every site admin configured in persisted site settings (`settings.admins`, plus `ALLOWED_ADMIN_EMAILS` if set, falling back to `getAllowedAdmins()`).
+- Email every site admin configured in persisted site settings (`settings.admins`, falling back to `getAllowedAdmins()` when empty/missing).
+- Send all outgoing notifications from `GMAIL_USER` (defaulting to `weeblesclay@gmail.com` when configured) via Gmail SMTP (`GMAIL_APP_PASSWORD`).
 - Reliably deliver purchase notifications server-to-server via a verified Stripe Webhook, even if the customer closes their browser before reaching `/order-success`.
 - Prevent duplicate purchase notification emails when Stripe retries webhook delivery.
 - Email admins immediately when a custom order request is submitted, including any optional reference photo as an email attachment, while preserving Netlify Forms submission as a non-blocking backup log.
@@ -36,7 +37,6 @@ Placed under `_lib/` so Netlify does not deploy it as a public HTTP function end
 - **`resolveAdminNotificationRecipients(event)`**:
   - Loads live settings via `loadPersistedSettings(event)`.
   - Uses `settings.admins` when it is a non-empty array; otherwise falls back to `getAllowedAdmins()`.
-  - Merges any comma-separated emails from `process.env.ALLOWED_ADMIN_EMAILS`.
   - Trims, lowercases, filters to valid email-shaped strings, and deduplicates.
 - **`escapeHtml(value)`**:
   - Escapes `&`, `<`, `>`, `"`, `'` for all interpolated user fields.

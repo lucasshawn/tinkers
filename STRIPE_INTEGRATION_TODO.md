@@ -15,6 +15,9 @@ The following values are placeholders and must be updated before going live.
 |-------|--------------|-------------|
 | `VITE_STRIPE_PUBLISHABLE_KEY` | `pk_test_...` | Your Stripe Publishable Key from the [Stripe Dashboard API Keys](https://dashboard.stripe.com/test/apikeys). Must keep the `VITE_` prefix for Vite client access. |
 | `STRIPE_SECRET_KEY` | `sk_test_...` | Your Stripe Secret Key from the [Stripe Dashboard API Keys](https://dashboard.stripe.com/test/apikeys). Must **not** use the `VITE_` prefix (server-only Netlify Function). |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_...` | Webhook signing secret from Stripe Dashboard for `https://weebleweb.netlify.app/.netlify/functions/stripe-webhook` (`checkout.session.completed`, `checkout.session.async_payment_succeeded`). |
+| `GMAIL_USER` | `weeblesclay@gmail.com` | Gmail account used to send admin purchase & custom-order notifications. |
+| `GMAIL_APP_PASSWORD` | `...` | 16-character Google App Password for `GMAIL_USER` (requires 2-Step Verification enabled on the Google account). |
 
 ## Configured Parameters
 
