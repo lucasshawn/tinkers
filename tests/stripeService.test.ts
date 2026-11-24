@@ -357,9 +357,55 @@ describe('create-checkout Netlify Function handler', () => {
 
     expect(response.statusCode).toBe(200);
     const lineItems = mockCreateSession.mock.calls[0][0].line_items;
-    expect(lineItems[0].price_data.product_data.images).toEqual(['/explicit-item.jpg']);
-    expect(lineItems[1].price_data.product_data.images).toEqual(['/keychain.jpg']);
-    expect(lineItems[2].price_data.product_data.images).toEqual(['/base.jpg']);
+    expect(lineItems[0].price_data.product_data.images).toEqual(['https://weebles.store/explicit-item.jpg']);
+    expect(lineItems[1].price_data.product_data.images).toEqual(['https://weebles.store/keychain.jpg']);
+    expect(lineItems[2].price_data.product_data.images).toEqual(['https://weebles.store/base.jpg']);
+  });
+
+  it('omits data URLs and invalid image URLs so Stripe does not reject them', async () => {
+    process.env.STRIPE_SECRET_KEY = 'sk_test_fake_key_123';
+    mockCreateSession.mockClear();
+    mockCreateSession.mockResolvedValue({
+      client_secret: 'cs_test_secret_mock',
+    });
+
+    vi.spyOn(adminSave, 'loadPersistedProducts').mockResolvedValue([
+      {
+        id: 'weeble-data-uri',
+        name: 'Uploaded Photo Weeble',
+        price: 16.0,
+        availableVariants: ['magnet'],
+        inStock: true,
+        stockCount: 2,
+        images: ['data:image/jpeg;base64,/9j/4AAQSkZJRg=='],
+      },
+    ]);
+
+    const response = (await handler(
+      {
+        httpMethod: 'POST',
+        headers: { origin: 'https://weebleweb.netlify.app' },
+        body: JSON.stringify({
+          items: [
+            {
+              id: 'weeble-data-uri-magnet',
+              productId: 'weeble-data-uri',
+              name: 'Uploaded Photo Weeble',
+              variant: 'magnet',
+              price: 16.0,
+              image: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
+              quantity: 1,
+            },
+          ],
+        }),
+      } as any,
+      {} as any,
+      () => {}
+    )) as any;
+
+    expect(response.statusCode).toBe(200);
+    const lineItems = mockCreateSession.mock.calls[0][0].line_items;
+    expect(lineItems[0].price_data.product_data.images).toBeUndefined();
   });
 
   it('returns 400 when an item productId is not found in catalog', async () => {

@@ -2,6 +2,26 @@ import { Handler } from '@netlify/functions';
 import Stripe from 'stripe';
 import { loadPersistedProducts } from './admin-save';
 
+const resolveStripeImageUrl = (rawImage: unknown, origin: string): string | null => {
+  if (typeof rawImage !== 'string') return null;
+  const trimmed = rawImage.trim();
+  if (!trimmed || trimmed.startsWith('data:')) return null;
+
+  const candidate = trimmed.startsWith('/') ? `${origin}${trimmed}` : trimmed;
+  if (candidate.length > 2048) return null;
+
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.href;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
 export const getStripe = (): Stripe | null => {
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
   return stripeSecretKey
@@ -41,11 +61,12 @@ export const handler: Handler = async (event) => {
     }
 
     let origin = event.headers.origin;
-    if (!origin) {
+    if (!origin || !/^https?:\/\//i.test(origin)) {
       const host = event.headers.host || 'localhost:8888';
       const proto = event.headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https');
       origin = `${proto}://${host}`;
     }
+    origin = origin.replace(/\/+$/, '');
 
     const stripe = getStripe();
 
@@ -73,16 +94,19 @@ export const handler: Handler = async (event) => {
           : item.variant === 'keychain'
           ? ' (🔑 Keychain)'
           : '';
-      const resolvedImage =
-        item.image?.trim() ||
-        (item.variant && product.variantImages?.[item.variant]?.trim()) ||
-        product.images?.[0];
+      const imageUrl =
+        resolveStripeImageUrl(item.image, origin) ??
+        resolveStripeImageUrl(
+          item.variant ? product.variantImages?.[item.variant] : undefined,
+          origin
+        ) ??
+        resolveStripeImageUrl(product.images?.[0], origin);
       return {
         price_data: {
           currency: 'usd',
           product_data: {
             name: `${product.name}${variantLabel}`,
-            images: resolvedImage ? [resolvedImage] : [],
+            ...(imageUrl ? { images: [imageUrl] } : {}),
             metadata: {
               variant: item.variant || 'standard',
               productId: item.productId,
